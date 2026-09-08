@@ -20,13 +20,25 @@ export async function DELETE(
       return NextResponse.json({ error: 'Missing entry ID' }, { status: 400 })
     }
 
-    // Use admin client to bypass RLS for ai_feedback since it lacks a user_id column
+    // 1. Verify ownership securely using the authenticated client
+    const { data: entryData, error: entryError } = await supabase
+      .from('time_entries')
+      .select('id, date')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single()
+
+    if (entryError || !entryData) {
+      return NextResponse.json({ error: 'Entry not found or unauthorized' }, { status: 404 })
+    }
+
+    // 2. Use admin client to bypass RLS for ai_feedback since it lacks a user_id column
+    // Now safe because we already verified the entry belongs to the user
     const supabaseAdmin = createSupabaseClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // First delete any associated ai_feedback to prevent foreign key errors
     const { error: feedbackError } = await supabaseAdmin
       .from('ai_feedback')
       .delete()
@@ -37,7 +49,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Failed to delete linked feedback' }, { status: 500 })
     }
 
-    // Then delete the actual entry, ensuring it belongs to the user
+    // 3. Delete the actual entry
     const { error: deleteError } = await supabase
       .from('time_entries')
       .delete()
@@ -46,6 +58,41 @@ export async function DELETE(
     if (deleteError) {
       console.error('Error deleting entry:', deleteError)
       return NextResponse.json({ error: 'Failed to delete entry' }, { status: 500 })
+    }
+
+    // 4. Recompute daily_summaries for the date of the deleted entry
+    const { data: allEntriesForDay } = await supabase
+      .from('time_entries')
+      .select('category, duration_minutes')
+      .eq('user_id', user.id)
+      .eq('date', entryData.date)
+
+    let productive = 0, distraction = 0, fuel = 0
+    if (allEntriesForDay) {
+      allEntriesForDay.forEach((e: any) => {
+        const mins = parseInt(e.duration_minutes || '0', 10)
+        if (e.category === 'Trading/Deep Work' || e.category === 'Agency/Business') productive += mins
+        if (e.category === 'Distraction') distraction += mins
+        if (e.category === 'Life/Fuel') fuel += mins
+      })
+    }
+
+    const { error: upsertError } = await supabase
+      .from('daily_summaries')
+      .upsert(
+        { 
+          user_id: user.id, 
+          date: entryData.date, 
+          productive_minutes: productive, 
+          distraction_minutes: distraction, 
+          fuel_minutes: fuel,
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: 'user_id,date' }
+      )
+
+    if (upsertError) {
+      console.error('Error updating daily_summary after deletion:', upsertError)
     }
 
     return NextResponse.json({ success: true })

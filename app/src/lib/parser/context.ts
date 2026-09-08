@@ -3,11 +3,10 @@ import { createClient } from '@/utils/supabase/server'
 export async function getUserLexicon(userId: string): Promise<string> {
   const supabase = createClient()
 
-  // 1. Check if user has >= 10 entries for history
+  // 1. Check if user has >= 10 corrections
   const { count, error } = await supabase
-    .from('time_entries')
+    .from('ai_feedback')
     .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId)
     
   if (error || count === null || count < 10) {
     return ''

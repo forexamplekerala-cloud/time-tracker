@@ -44,7 +44,7 @@ export default function TimelineList({ initialEntries }: { initialEntries: Entry
     try {
       const res = await fetch(`/api/entries/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete')
-      router.refresh() // re-fetch data on the server component
+      router.refresh()
     } catch (e) {
       console.error(e)
       alert('Could not delete entry.')
@@ -54,7 +54,6 @@ export default function TimelineList({ initialEntries }: { initialEntries: Entry
   }
 
   const handleEdit = async (entry: Entry) => {
-    // Edit flow: Take it back to the parser. Delete it here, then redirect.
     if (!confirm('Edit this entry? It will be removed from your timeline so you can parse it again.')) return
     setLoadingId(entry.id)
     try {
@@ -74,12 +73,11 @@ export default function TimelineList({ initialEntries }: { initialEntries: Entry
   if (!initialEntries || initialEntries.length === 0) {
     return (
       <div className="text-center p-8 bg-surface border border-border rounded-md">
-        <p className="text-ink-muted text-sm">No entries logged today.</p>
+        <p className="text-ink-muted text-sm">No entries logged for this day.</p>
       </div>
     )
   }
 
-  // Sort by created_at or start time if needed, but assuming DB order or sequential insert is fine
   return (
     <div className="flex flex-col gap-3">
       <h3 className="text-sm font-semibold text-ink-muted uppercase tracking-wider mb-1">Timeline</h3>

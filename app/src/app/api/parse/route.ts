@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
+import { GoogleGenerativeAI, Schema, Type } from '@google/generative-ai'
 import { createClient } from '@/utils/supabase/server'
 import { buildParserPrompt } from '@/lib/parser/prompt'
 import { getUserLexicon } from '@/lib/parser/context'
@@ -7,36 +7,36 @@ import { runValidators } from '@/lib/parser/validators'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
-const parserSchema = {
-  type: SchemaType.OBJECT,
+const parserSchema: Schema = {
+  type: Type.OBJECT,
   properties: {
     date: {
-      type: SchemaType.STRING,
+      type: Type.STRING,
       description: "YYYY-MM-DD date format. Must strictly be the today date passed in the prompt."
     },
     entries: {
-      type: SchemaType.ARRAY,
+      type: Type.ARRAY,
       items: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          start_time: { type: SchemaType.STRING, description: "HH:MM (24-hour format) or null if only duration is known", nullable: true },
-          end_time: { type: SchemaType.STRING, description: "HH:MM (24-hour format) or null if only duration is known", nullable: true },
-          duration_minutes: { type: SchemaType.INTEGER, description: "Number of minutes or null", nullable: true },
+          start_time: { type: Type.STRING, description: "HH:MM (24-hour format) or null if only duration is known", nullable: true },
+          end_time: { type: Type.STRING, description: "HH:MM (24-hour format) or null if only duration is known", nullable: true },
+          duration_minutes: { type: Type.INTEGER, description: "Number of minutes or null", nullable: true },
           category: { 
-            type: SchemaType.STRING, 
+            type: Type.STRING, 
             description: "Must be exactly one of: 'Trading/Deep Work', 'Agency/Business', 'Life/Fuel', 'Distraction', 'Unclear'" 
           },
-          activity: { type: SchemaType.STRING, description: "Short description of the activity" },
-          raw_fragment: { type: SchemaType.STRING, description: "The original text fragment this entry corresponds to" },
-          confidence: { type: SchemaType.STRING, description: "high, medium, or low" },
-          needs_review: { type: SchemaType.BOOLEAN, description: "True if range is incomplete, overlapping, or uncertain" }
+          activity: { type: Type.STRING, description: "Short description of the activity" },
+          raw_fragment: { type: Type.STRING, description: "The original text fragment this entry corresponds to" },
+          confidence: { type: Type.STRING, description: "high, medium, or low" },
+          needs_review: { type: Type.BOOLEAN, description: "True if range is incomplete, overlapping, or uncertain" }
         },
         required: ["category", "activity", "raw_fragment", "confidence", "needs_review"]
       }
     },
     unparsed_fragments: {
-      type: SchemaType.ARRAY,
-      items: { type: SchemaType.STRING },
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
       description: "Text fragments referencing non-today dates (e.g. 'yesterday evening') or that could not be parsed."
     }
   },
@@ -67,51 +67,27 @@ export async function POST(req: Request) {
       day: '2-digit',
     }).format(now).split('/').reverse().join('-')
 
-    // Server-issued IST current time (HH:MM)
-    const istCurrentTime = new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Asia/Kolkata',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(now)
-
     // Context Assembly
     const userLexicon = await getUserLexicon(user.id)
-    const prompt = buildParserPrompt(istDateString, istCurrentTime, userLexicon, inputMode as 'text' | 'voice') + `\n\nUser text:\n"${text}"\n`
+    const prompt = buildParserPrompt(istDateString, userLexicon, inputMode as 'text' | 'voice') + `\n\nUser text:\n"${text}"\n`
 
-    // Timeout logic (55 seconds)
+    // Timeout logic (8 seconds)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-    const primaryModelName = process.env.GEMINI_MODEL || 'gemini-3.6-flash'
-    let modelName = primaryModelName;
-    let result;
+    const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash'
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: parserSchema,
+      }
+    })
 
     try {
-      const getModel = (name: string) => genAI.getGenerativeModel({
-        model: name,
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: parserSchema,
-        }
-      });
-
-      try {
-        result = await getModel(modelName).generateContent({
-           contents: [{ role: 'user', parts: [{ text: prompt }] }]
-        }, { signal: controller.signal })
-      } catch (firstErr: any) {
-        // If 503 Service Unavailable, fallback to a lighter model immediately
-        if (firstErr.message?.includes('503') || firstErr.status === 503) {
-          console.warn(`[Parser] ${modelName} returned 503, retrying with fallback gemini-3.1-flash-lite...`)
-          modelName = 'gemini-3.1-flash-lite'
-          result = await getModel(modelName).generateContent({
-             contents: [{ role: 'user', parts: [{ text: prompt }] }]
-          }, { signal: controller.signal })
-        } else {
-          throw firstErr
-        }
-      }
+      const result = await model.generateContent({
+         contents: [{ role: 'user', parts: [{ text: prompt }] }]
+      }, { signal: controller.signal })
       
       clearTimeout(timeoutId)
       
@@ -119,7 +95,7 @@ export async function POST(req: Request) {
       const parsedData = JSON.parse(responseText)
 
       // Run deterministic validators
-      const validatedData = runValidators(text, parsedData, istDateString, istCurrentTime, inputMode as 'text' | 'voice')
+      const validatedData = runValidators(text, parsedData, istDateString, inputMode as 'text' | 'voice')
 
       return NextResponse.json(validatedData)
     } catch (e: any) {
@@ -130,7 +106,7 @@ export async function POST(req: Request) {
             date: istDateString,
             entries: [],
             unparsed_fragments: [text],
-            warnings: ['Parser timeout exceeded 25s']
+            warnings: ['Parser timeout exceeded 8s']
          })
       }
       throw e

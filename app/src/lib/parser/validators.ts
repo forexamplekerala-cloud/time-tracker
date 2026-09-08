@@ -46,7 +46,6 @@ export function runValidators(
   input: string, 
   rawOutput: any, 
   serverIstDate: string,
-  istCurrentTime: string,
   inputMode: 'text' | 'voice' = 'text'
 ): ParseOutput {
   
@@ -56,18 +55,7 @@ export function runValidators(
   }
 
   // V6: Date matching
-  let parsedDate = rawOutput.date;
-  if (parsedDate) {
-    const parts = parsedDate.split('-');
-    if (parts.length === 3) {
-      const y = parts[0];
-      const m = parts[1].padStart(2, '0');
-      const d = parts[2].padStart(2, '0');
-      parsedDate = `${y}-${m}-${d}`;
-    }
-  }
-
-  if (parsedDate !== serverIstDate) {
+  if (rawOutput.date !== serverIstDate) {
     // If AI hallucinates a different date, we reject all entries to unparsed_fragments
     return { date: serverIstDate, entries: [], unparsed_fragments: [input] };
   }
@@ -75,7 +63,6 @@ export function runValidators(
   let finalEntries: ParsedEntry[] = [];
   let unparsed = rawOutput.unparsed_fragments || [];
   let warnings: string[] = [];
-  const currentMins = timeToMinutes(istCurrentTime);
 
   for (const entry of rawOutput.entries) {
     const violations: string[] = [];
@@ -92,27 +79,6 @@ export function runValidators(
     if (hardFail) {
       unparsed.push(entry.raw_fragment || "unknown fragment");
       continue;
-    }
-
-    // V9 Future Time Guard
-    if (currentMins !== null) {
-      const startMins = timeToMinutes(entry.start_time);
-      const endMins = timeToMinutes(entry.end_time);
-
-      if (startMins !== null && startMins > currentMins) {
-        // Entire entry is in the future -> hard reject to unparsed
-        unparsed.push(entry.raw_fragment || 'unknown fragment');
-        warnings.push(`V9_FUTURE_TIME: Entry "${entry.activity}" starts at ${entry.start_time}, current time is ${istCurrentTime}`);
-        continue; // skip this entry entirely
-      }
-
-      if (endMins !== null && endMins > currentMins) {
-        // Entry starts in past but ends in future -> flag for review, clear the future end_time
-        entry.end_time = null;
-        entry.needs_review = true;
-        if (!entry.violations) entry.violations = [];
-        entry.violations.push('V9_FUTURE_END_TIME');
-      }
     }
 
     // V2 Traceability
@@ -139,19 +105,14 @@ export function runValidators(
        const h = parseInt(entry.start_time.split(':')[0], 10);
        const h12 = h > 12 ? h - 12 : h;
        const inputLower = input.toLowerCase();
-       
-       const hRegex = new RegExp('\\b' + h + '\\b');
-       const h12Regex = new RegExp('\\b' + h12 + '\\b');
-       
-       if (!hRegex.test(inputLower) && !h12Regex.test(inputLower)) {
+       if (!inputLower.includes(h.toString()) && !inputLower.includes(h12.toString())) {
          violations.push('V4_INVENTED_TIME');
        }
     }
 
     if (violations.length > 0) {
       entry.needs_review = true;
-      if (!entry.violations) entry.violations = [];
-      entry.violations.push(...violations);
+      entry.violations = violations;
     }
 
     finalEntries.push(entry);

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { PenSquare, LayoutDashboard, CalendarDays, Settings } from 'lucide-react'
+import { PenSquare, LayoutDashboard, CalendarDays } from 'lucide-react'
 import clsx from 'clsx'
 
 export default function BottomNav() {
@@ -17,7 +17,6 @@ export default function BottomNav() {
     { label: 'Log', href: '/log', icon: PenSquare },
     { label: 'Today', href: '/today', icon: LayoutDashboard },
     { label: 'Week', href: '/week', icon: CalendarDays },
-    { label: 'Settings', href: '/settings', icon: Settings },
   ]
 
   return (

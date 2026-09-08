@@ -34,9 +34,8 @@ export async function updateSession(request: NextRequest) {
 
   // Protected routes
   const isPublicRoute = request.nextUrl.pathname.startsWith('/login')
-  const isApiRoute = request.nextUrl.pathname.startsWith('/api')
   
-  if (!user && !isPublicRoute && !isApiRoute) {
+  if (!user && !isPublicRoute) {
     // Redirect unauthenticated users to login page
     const url = request.nextUrl.clone()
     url.pathname = '/login'

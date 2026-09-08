@@ -1,4 +1,3 @@
-import { Suspense } from 'react'
 import LogInput from './LogInput'
 import { createClient } from '@/utils/supabase/server'
 
@@ -23,9 +22,7 @@ export default async function LogPage() {
       
       <main className="flex-1 flex flex-col pt-4">
         <h1 className="text-lg text-ink font-medium mb-6">What actually happened today?</h1>
-        <Suspense fallback={<div className="text-ink-muted">Loading...</div>}>
-          <LogInput />
-        </Suspense>
+        <LogInput />
       </main>
     </div>
   )

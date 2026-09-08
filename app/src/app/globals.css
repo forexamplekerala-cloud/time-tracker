@@ -15,5 +15,5 @@
 body {
   background-color: var(--background);
   color: var(--ink);
-  font-family: var(--font-inter), sans-serif;
+  font-family: var(--font-geist-sans), sans-serif;
 }

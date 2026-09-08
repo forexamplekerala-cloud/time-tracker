@@ -32,8 +32,7 @@ export async function POST(req: Request) {
       raw_fragment: e.raw_fragment || '',
       source: 'ai',
       confidence: e.confidence,
-      needs_review: e.needs_review,
-      impact_rating: e.impact_rating || null
+      needs_review: e.needs_review
     }))
 
     const { data: insertedEntries, error: insertError } = await supabase
@@ -47,25 +46,56 @@ export async function POST(req: Request) {
     }
 
     // 3. Insert AI Feedback for misread or edited entries
-    const feedbackToInsert = entries.map((e: any, index: number) => {
-      if (e.ai_misread || e.edited) {
-        return {
-          entry_id: insertedEntries[index].id,
-          accepted: false,
-          corrected_fields: { 
-            note: e.ai_misread ? "Marked as misread by user" : "Edited by user",
-            violations: e.violations || []
-          }
+    const feedbackEntries = entries.filter((e: any) => e.ai_misread || e.edited)
+    if (feedbackEntries.length > 0) {
+      const feedbackToInsert = feedbackEntries.map((e: any, index: number) => ({
+        entry_id: insertedEntries.find(dbE => dbE.activity === e.activity && dbE.category === e.category)?.id || insertedEntries[index].id,
+        accepted: false,
+        corrected_fields: { 
+          note: e.ai_misread ? "Marked as misread by user" : "Edited by user",
+          violations: e.violations || []
         }
+      }))
+      const { error: feedbackError } = await supabase.from('ai_feedback').insert(feedbackToInsert)
+      if (feedbackError) {
+        console.error('Error inserting ai_feedback:', feedbackError)
       }
-      return null
-    }).filter(Boolean)
-
-    if (feedbackToInsert.length > 0) {
-      await supabase.from('ai_feedback').insert(feedbackToInsert)
     }
 
-    // Recompute logic removed. We now compute dynamically on the Today page to avoid race conditions and overwrites.
+    // 4. Recompute daily_summaries securely by querying all entries for the day
+    const { data: allEntriesForDay } = await supabase
+      .from('time_entries')
+      .select('category, duration_minutes')
+      .eq('user_id', user.id)
+      .eq('date', date)
+
+    let productive = 0, distraction = 0, fuel = 0
+    if (allEntriesForDay) {
+      allEntriesForDay.forEach((e: any) => {
+        const mins = parseInt(e.duration_minutes || '0', 10)
+        if (e.category === 'Trading/Deep Work' || e.category === 'Agency/Business') productive += mins
+        if (e.category === 'Distraction') distraction += mins
+        if (e.category === 'Life/Fuel') fuel += mins
+      })
+    }
+
+    const { error: upsertError } = await supabase
+      .from('daily_summaries')
+      .upsert(
+        { 
+          user_id: user.id, 
+          date, 
+          productive_minutes: productive, 
+          distraction_minutes: distraction, 
+          fuel_minutes: fuel,
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: 'user_id,date' }
+      )
+
+    if (upsertError) {
+      console.error('Error upserting daily_summary:', upsertError)
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

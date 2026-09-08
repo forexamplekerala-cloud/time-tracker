@@ -1,64 +1,83 @@
 import { createClient } from '@/utils/supabase/server'
-import { getTruthLine, getProcrastinationLine } from '@/lib/dashboard/truth'
+import { getTruthLine } from '@/lib/dashboard/truth'
+import Link from 'next/link'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import TimelineList from './TimelineList'
 
-export default async function TodayPage() {
+export default async function TodayPage({
+  searchParams
+}: {
+  searchParams: { date?: string }
+}) {
   const supabase = createClient()
   
   // Real implementation: get IST date correctly
   const now = new Date()
-  const dateStr = new Intl.DateTimeFormat('en-GB', {
+  const istDateStr = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Kolkata',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
   }).format(now).split('/').reverse().join('-')
 
+  // Use searchParams.date if valid, otherwise fallback to IST today
+  const targetDateStr = searchParams.date || istDateStr
+  const isToday = targetDateStr === istDateStr
+
+  // Calculate previous and next dates for arrows
+  const targetDateObj = new Date(targetDateStr)
+  targetDateObj.setHours(12, 0, 0, 0) // Avoid timezone shifts when adding/subtracting days
+  
+  const prevDateObj = new Date(targetDateObj)
+  prevDateObj.setDate(prevDateObj.getDate() - 1)
+  const prevDateStr = prevDateObj.toISOString().split('T')[0]
+
+  const nextDateObj = new Date(targetDateObj)
+  nextDateObj.setDate(nextDateObj.getDate() + 1)
+  const nextDateStr = nextDateObj.toISOString().split('T')[0]
+  
+  const canGoForward = !isToday
+
+  // Fetch summaries
+  const { data: summary } = await supabase
+    .from('daily_summaries')
+    .select('*')
+    .eq('date', targetDateStr)
+    .single()
+
+  // Fetch entries for the timeline
   const { data: entries } = await supabase
     .from('time_entries')
     .select('*')
-    .eq('date', dateStr)
+    .eq('date', targetDateStr)
     .order('created_at', { ascending: true })
 
-  let prod = 0
-  let dist = 0
-  let fuel = 0
-  let unclear = 0
-  let badImpact = 0
-
-  if (entries) {
-    entries.forEach(e => {
-      let mins = e.duration_minutes || 0
-      
-      // Calculate from start/end if duration is missing
-      if (!mins && e.start_time && e.end_time) {
-        const [h1, m1] = e.start_time.split(':').map(Number)
-        const [h2, m2] = e.end_time.split(':').map(Number)
-        mins = (h2 * 60 + m2) - (h1 * 60 + m1)
-        if (mins < 0) mins += 24 * 60 // Handle cross-midnight if any
-      }
-
-      if (e.category === 'Trading/Deep Work' || e.category === 'Agency/Business') prod += mins
-      if (e.category === 'Distraction') dist += mins
-      if (e.category === 'Life/Fuel') fuel += mins
-      if (e.category === 'Unclear') unclear += mins
-      if (e.impact_rating === 'bad') badImpact += mins
-    })
-  }
-
-  const totalLogged = prod + dist + fuel + unclear
+  const prod = summary?.productive_minutes || 0
+  const dist = summary?.distraction_minutes || 0
+  const fuel = summary?.fuel_minutes || 0
+  const totalLogged = prod + dist + fuel
   
-  const truthLine = getTruthLine(dist, prod)
-  const procLine = getProcrastinationLine(badImpact)
+  const truthLine = getTruthLine(dist, prod, isToday)
+
+  const displayTitle = isToday ? "Today's Audit" : `${targetDateStr} Audit`
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-3rem)] py-6">
       <header className="mb-8">
-        <h1 className="text-2xl text-ink font-semibold mb-2">Today's Audit</h1>
-        <p className="text-lg font-medium text-[#DC2626]">{truthLine}</p>
-        {procLine && (
-          <p className="text-sm font-medium text-amber-700 mt-2">{procLine}</p>
-        )}
+        <div className="flex items-center gap-4 mb-2">
+          <Link href={`/today?date=${prevDateStr}`} className="p-2 -ml-2 rounded-full hover:bg-surface transition-colors" title="Previous Day">
+            <ChevronLeft className="w-5 h-5 text-ink-muted" />
+          </Link>
+          <h1 className="text-2xl text-ink font-semibold flex-1 text-center">{displayTitle}</h1>
+          {canGoForward ? (
+            <Link href={`/today?date=${nextDateStr}`} className="p-2 -mr-2 rounded-full hover:bg-surface transition-colors" title="Next Day">
+              <ChevronRight className="w-5 h-5 text-ink-muted" />
+            </Link>
+          ) : (
+            <div className="w-9 h-9 -mr-2"></div> // Spacer to keep title centered
+          )}
+        </div>
+        <p className="text-lg font-medium text-[#DC2626] text-center">{truthLine}</p>
       </header>
 
       <div className="grid grid-cols-2 gap-4 mb-8">
@@ -70,12 +89,6 @@ export default async function TodayPage() {
           <p className="text-sm text-ink-muted mb-1">Distraction</p>
           <p className="text-2xl font-mono text-[#DC2626]">{Math.floor(dist/60)}h {dist%60}m</p>
         </div>
-        {(fuel > 0 || unclear > 0) && (
-          <div className="col-span-2 flex gap-4">
-             {fuel > 0 && <div className="flex-1 p-3 bg-surface border border-border rounded-md"><p className="text-sm text-ink-muted mb-1">Life/Fuel</p><p className="font-mono text-[#F59E0B]">{Math.floor(fuel/60)}h {fuel%60}m</p></div>}
-             {unclear > 0 && <div className="flex-1 p-3 bg-surface border border-border rounded-md"><p className="text-sm text-ink-muted mb-1">Unclear</p><p className="font-mono text-[#A1A1AA]">{Math.floor(unclear/60)}h {unclear%60}m</p></div>}
-          </div>
-        )}
       </div>
 
       {totalLogged > 0 && (
@@ -83,7 +96,6 @@ export default async function TodayPage() {
           <div className="flex h-6 rounded-full overflow-hidden bg-[#F4F4F5]">
             <div style={{ width: `${(prod/totalLogged)*100}%` }} className="bg-[#16A34A] h-full transition-all"></div>
             <div style={{ width: `${(fuel/totalLogged)*100}%` }} className="bg-[#F59E0B] h-full transition-all"></div>
-            <div style={{ width: `${(unclear/totalLogged)*100}%` }} className="bg-[#A1A1AA] h-full transition-all"></div>
             <div style={{ width: `${(dist/totalLogged)*100}%` }} className="bg-[#DC2626] h-full transition-all"></div>
           </div>
           <p className="text-xs text-ink-muted mt-2 text-right">
