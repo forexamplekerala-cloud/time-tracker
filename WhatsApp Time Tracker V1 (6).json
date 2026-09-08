@@ -1,0 +1,719 @@
+{
+  "name": "WhatsApp Time Tracker V1",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nconst value =\n  item.value ??\n  item.entry?.[0]?.changes?.[0]?.value ??\n  item.body?.entry?.[0]?.changes?.[0]?.value ??\n  {};\n\nconst msg = value.messages?.[0] ?? {};\nconst contact = value.contacts?.[0] ?? {};\n\nconst now = new Date();\nconst ist = new Date(now.toLocaleString(\"en-US\", { timeZone: \"Asia/Kolkata\" }));\nconst yyyy = ist.getFullYear();\nconst mm = String(ist.getMonth() + 1).padStart(2, \"0\");\nconst dd = String(ist.getDate()).padStart(2, \"0\");\nconst HH = String(ist.getHours()).padStart(2, \"0\");\nconst MM = String(ist.getMinutes()).padStart(2, \"0\");\n\nreturn [{\n  json: {\n    message_id: msg.id ?? \"\",\n    sender: msg.from ?? \"\",\n    profile_name: contact.profile?.name ?? \"\",\n    message_type: msg.type ?? \"\",\n    message_text: msg.text?.body ?? \"\",\n    whatsapp_timestamp: msg.timestamp ?? \"\",\n    timestamp_ist: `${yyyy}-${mm}-${dd} ${HH}:${MM}`,\n    date: `${yyyy}-${mm}-${dd}`,\n    source: \"whatsapp\"\n  }\n}];"
+      },
+      "name": "Normalize Inbound",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        -1280,
+        320
+      ],
+      "id": "cb7d84c7-320c-44b7-929b-210565333896"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.message_type}}",
+              "rightValue": "text",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "leftValue": "={{$json.message_text}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "leftValue": "={{$json.message_id}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Validate Text Event",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1056,
+        320
+      ],
+      "id": "2382e1af-355b-47e5-a166-33fcbf3ba4a2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$json.sender}}",
+              "rightValue": "919400259265",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "39638514-28b7-4c93-84f0-bb6066b214ab"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Sender Allowlist",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        240
+      ],
+      "id": "1bd9fd33-e632-4b2a-9085-e13efd27ab31"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "upsert",
+        "sheetId": "1zIyOJvgv1FdmcGQ4fU2gdfGykK8YIdUrEF7cmVeCn6A",
+        "range": "A:H",
+        "key": "messageid",
+        "options": {}
+      },
+      "name": "Log Error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        416
+      ],
+      "id": "d55e6805-02ca-4e8e-85b4-57380542f8e0",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "0RA07Vxuw5UkiI5R",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "1199248703275272",
+        "recipientPhoneNumber": "919400259265",
+        "textBody": "Could not read that as a valid log. Send plain text only, from the allowed number.",
+        "additionalFields": {}
+      },
+      "name": "Send Clarification",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        -384,
+        416
+      ],
+      "id": "6752134e-53d5-4934-920a-dc36c681bab1",
+      "webhookId": "770e5299-0d2c-4699-af38-48b8c46d29cc",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "Zq4yfMzG9vYXk6oC",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "compare": "selectedFields",
+        "fieldsToCompare": "message_id",
+        "options": {}
+      },
+      "name": "Dedupe by message_id",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        176
+      ],
+      "id": "ececf4cd-186f-46d7-869c-5c24a344f69f"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.message_text.toLowerCase()}}",
+                    "rightValue": "week report",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "cbd856fc-8a3d-4ae7-85df-c3abe0b6ab12"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.message_text.toLowerCase()}}",
+                    "rightValue": "report",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "f6991ee2-5a1c-42a8-8de3-6fe1ce9d581e"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "name": "Intent Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -384,
+        160
+      ],
+      "id": "8a1e0612-d6c3-4677-b508-6b3c9270e08d"
+    },
+    {
+      "parameters": {
+        "jsCode": "const t = ($json.message_text || \"\").trim();\n\nfunction categoryFromText(s) {\n  if (/(trade|trading|chart|nse|market)/i.test(s)) return \"Trading/Build\";\n  if (/(automation|agency|client|lead|website|n8n)/i.test(s)) return \"Agency Work\";\n  if (/(scroll|instagram|youtube|phone|waste|wasted)/i.test(s)) return \"Distraction\";\n  if (/(pray|prayer|masjid|gym|family|wife|bath|breakfast|lunch|dinner)/i.test(s)) return \"Fuel\";\n  return \"Idle\";\n}\n\nlet duration_min = null;\nlet start_time = \"\";\nlet end_time = \"\";\nlet parse_status = \"raw_only\";\n\nconst range = t.match(/(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?\\s*(?:to|-)\\s*(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?/i);\n\nif (range) {\n  const [, h1, m1 = \"00\", ap1, h2, m2 = \"00\", ap2] = range;\n  function to24(h, m, ap) {\n    let hh = parseInt(h, 10);\n    if (ap) {\n      const a = ap.toLowerCase();\n      if (a === \"pm\" && hh !== 12) hh += 12;\n      if (a === \"am\" && hh === 12) hh = 0;\n    }\n    return `${String(hh).padStart(2, \"0\")}:${String(parseInt(m, 10)).padStart(2, \"0\")}`;\n  }\n  start_time = to24(h1, m1, ap1);\n  end_time = to24(h2, m2, ap2);\n  const [sh, sm] = start_time.split(\":\").map(Number);\n  const [eh, em] = end_time.split(\":\").map(Number);\n  duration_min = (eh * 60 + em) - (sh * 60 + sm);\n  if (duration_min < 0) duration_min += 24 * 60;\n  parse_status = \"time_range\";\n} else {\n  const d = t.match(/(\\d+)\\s*(min|mins|minute|minutes|hr|hrs|hour|hours)/i);\n  if (d) {\n    const n = parseInt(d[1], 10);\n    const u = d[2].toLowerCase();\n    duration_min = /hr|hour/.test(u) ? n * 60 : n;\n    parse_status = \"explicit_duration\";\n  }\n}\n\nreturn [{\n  json: {\n    ...$json,\n    start_time,\n    end_time,\n    duration_min,\n    parse_status,\n    raw_text: t,\n    activity: t,\n    category: categoryFromText(t),\n    report_scope: \"\"\n  }\n}];"
+      },
+      "name": "Parse Time Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        384
+      ],
+      "id": "53a57268-393e-41c8-848f-2e17121ff8c4"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "name": "Clean Record",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        64,
+        384
+      ],
+      "id": "18b3c192-dbf1-496e-b089-e11db8ab75e9"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "upsert",
+        "sheetId": "1zIyOJvgv1FdmcGQ4fU2gdfGykK8YIdUrEF7cmVeCn6A",
+        "range": "Activity Log!A:Z",
+        "key": "message_id",
+        "options": {}
+      },
+      "name": "Append Raw Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [
+        288,
+        384
+      ],
+      "id": "8b7df8e5-a95a-470f-8fff-a8d8a20fbc90",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "0RA07Vxuw5UkiI5R",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=1199248703275272",
+        "recipientPhoneNumber": "919400259265",
+        "textBody": "=Logged.\\nCategory: {{$json.category}}\\nDuration: {{$json.duration_min || \"unparsed\"}}\\nParse: {{$json.parse_status}}\\nText: {{$json.raw_text}}",
+        "additionalFields": {}
+      },
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        512,
+        384
+      ],
+      "id": "932d8f9c-9fef-489c-8b0e-8ec9f4da4bc4",
+      "webhookId": "7e3f6aca-79ce-4cdc-b8a9-386a092d6fc1",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "Zq4yfMzG9vYXk6oC",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "sheetId": "1zIyOJvgv1FdmcGQ4fU2gdfGykK8YIdUrEF7cmVeCn6A",
+        "range": "=Activity Log!A:Z",
+        "options": {}
+      },
+      "name": "Read Logs (Daily)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        192
+      ],
+      "id": "d8fbad9f-ea56-46bb-96cf-e9476c0d8aab",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "0RA07Vxuw5UkiI5R",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const sender = $(\"Normalize Inbound\").first().json.sender;\nconst today = $(\"Normalize Inbound\").first().json.date;\nconst rows = $input.all().map(i => i.json);\n\nconst filtered = rows.filter(r => r.sender === sender && r.date === today);\nconst valid = filtered.filter(r => r.parse_status !== \"raw_only\");\n\nfunction sum(cat) {\n  return valid.filter(r => r.category === cat).reduce((a, r) => a + (Number(r.duration_min) || 0), 0);\n}\n\nconst trading = sum(\"Trading/Build\");\nconst agency = sum(\"Agency Work\");\nconst distraction = sum(\"Distraction\");\nconst fuel = sum(\"Fuel\");\nconst idle = sum(\"Idle\");\nconst total = trading + agency + distraction + fuel + idle;\n\nfunction fmt(min) {\n  const h = Math.floor(min / 60);\n  const m = min % 60;\n  if (h && m) return `${h}h ${m}m`;\n  if (h) return `${h}h`;\n  return `${m}m`;\n}\nfunction pct(x) { return total ? Math.round((x / total) * 100) : 0; }\n\nconst brutal = distraction > agency + trading\n  ? \"Distraction beat real work today. The phone is winning.\"\n  : \"Work beat drift today. Do it again tomorrow.\";\n\nconst text = `DAILY REPORT\n${today}\nTrading+Build: ${fmt(trading)} (${pct(trading)}%)\nAgency Work: ${fmt(agency)} (${pct(agency)}%)\nDistraction: ${fmt(distraction)} (${pct(distraction)}%)\nFuel: ${fmt(fuel)} (${pct(fuel)}%)\nIdle: ${fmt(idle)} (${pct(idle)}%)\nTOTAL PARSED: ${fmt(total)}\n\nBRUTAL TRUTH:\n${brutal}`;\n\nreturn [{ json: { sender, report_text: text } }];"
+      },
+      "name": "Build Daily Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        64,
+        192
+      ],
+      "id": "ffe152cc-a63d-4a13-9e92-42cc73adaf45"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=1199248703275272",
+        "recipientPhoneNumber": "919400259265",
+        "textBody": "={{$json.report_text}}",
+        "additionalFields": {}
+      },
+      "name": "Send Daily Report",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        288,
+        192
+      ],
+      "id": "2db9b5be-db25-490b-bc70-714b9973d4cf",
+      "webhookId": "00d57b15-343b-4d30-8077-f7fb4e7426de",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "Zq4yfMzG9vYXk6oC",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "sheetId": "1zIyOJvgv1FdmcGQ4fU2gdfGykK8YIdUrEF7cmVeCn6A",
+        "range": "Activity Log!A:Z",
+        "options": {}
+      },
+      "name": "Read Logs (Weekly)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        0
+      ],
+      "id": "0cc8c897-af3c-43e8-a128-d47522c5ce44",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "0RA07Vxuw5UkiI5R",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const sender = $(\"Normalize Inbound\").first().json.sender;\nconst rows = $input.all().map(i => i.json);\n\nconst now = new Date();\nconst sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);\n\nconst filtered = rows.filter(r => {\n  if (r.sender !== sender) return false;\n  const d = new Date(r.date);\n  return d >= sevenDaysAgo && r.parse_status !== \"raw_only\";\n});\n\nconst byDate = {};\nfor (const r of filtered) {\n  byDate[r.date] = byDate[r.date] || { productive: 0, distraction: 0 };\n  const dur = Number(r.duration_min) || 0;\n  if (r.category === \"Trading/Build\" || r.category === \"Agency Work\") byDate[r.date].productive += dur;\n  if (r.category === \"Distraction\") byDate[r.date].distraction += dur;\n}\n\nconst dates = Object.keys(byDate).sort();\nlet bestDay = null, worstDay = null;\nfor (const d of dates) {\n  const net = byDate[d].productive - byDate[d].distraction;\n  if (bestDay === null || net > byDate[bestDay].productive - byDate[bestDay].distraction) bestDay = d;\n  if (worstDay === null || net < byDate[worstDay].productive - byDate[worstDay].distraction) worstDay = d;\n}\n\nconst totalProductive = filtered.filter(r => r.category === \"Trading/Build\" || r.category === \"Agency Work\")\n  .reduce((a, r) => a + (Number(r.duration_min) || 0), 0);\nconst totalDistraction = filtered.filter(r => r.category === \"Distraction\")\n  .reduce((a, r) => a + (Number(r.duration_min) || 0), 0);\n\nfunction fmt(min) {\n  const h = Math.floor(min / 60);\n  const m = min % 60;\n  return h ? `${h}h ${m}m` : `${m}m`;\n}\n\nconst text = `WEEKLY REPORT\nBest day: ${bestDay || \"n/a\"}\nWorst day: ${worstDay || \"n/a\"}\nTotal productive: ${fmt(totalProductive)}\nTotal distraction: ${fmt(totalDistraction)}\n\nBRUTAL TRUTH:\n${totalDistraction > totalProductive ? \"This week the phone beat your ambitions. Fix tomorrow, not next Monday.\" : \"This week you outworked distraction. Keep the ratio.\"}`;\n\nreturn [{ json: { sender, report_text: text } }];"
+      },
+      "name": "Build Weekly Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        64,
+        0
+      ],
+      "id": "a6cec75b-02b8-44ba-bb67-a48b34cc4920"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=1199248703275272",
+        "recipientPhoneNumber": "919400259265",
+        "textBody": "={{$json.report_text}}",
+        "additionalFields": {}
+      },
+      "name": "Send Weekly Report",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        288,
+        0
+      ],
+      "id": "8cc3febb-4b69-4e28-9eb1-8fddb178cea1",
+      "webhookId": "986cf99f-9b00-4cc2-9954-a0086f3a8130",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "Zq4yfMzG9vYXk6oC",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ba6dd925-564f-4904-b741-820df3604107",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1504,
+        320
+      ],
+      "id": "9334a572-0301-4bf1-aa2c-17bff7393e0c",
+      "name": "Webhook",
+      "webhookId": "ba6dd925-564f-4904-b741-820df3604107"
+    },
+    {
+      "parameters": {
+        "path": "ba6dd925-564f-4904-b741-820df3604107",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1504,
+        640
+      ],
+      "id": "b2f9a383-bf24-4816-9657-a059d5772f47",
+      "name": "Webhook1",
+      "webhookId": "90b8ab0e-3182-4a7c-ab12-4a153a07f5ea"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "886ba9d2-c665-41b8-9f03-75a4210f334e",
+              "leftValue": "=={{$json.query[\"hub.verify_token\"]}}",
+              "rightValue": "my_n8n_verify_token_123",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1280,
+        640
+      ],
+      "id": "fb45a4bb-ede9-4f67-8167-3f28866aad30",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=={{$json.query[\"hub.challenge\"]}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -1056,
+        640
+      ],
+      "id": "e5db4020-da58-4e28-9c9d-a6b80a9efd25",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Normalize Inbound": {
+      "main": [
+        [
+          {
+            "node": "Validate Text Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Text Event": {
+      "main": [
+        [
+          {
+            "node": "Sender Allowlist",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sender Allowlist": {
+      "main": [
+        [
+          {
+            "node": "Dedupe by message_id",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error": {
+      "main": [
+        [
+          {
+            "node": "Send Clarification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedupe by message_id": {
+      "main": [
+        [
+          {
+            "node": "Intent Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intent Router": {
+      "main": [
+        [
+          {
+            "node": "Read Logs (Weekly)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Logs (Daily)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse Time Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Time Log": {
+      "main": [
+        [
+          {
+            "node": "Clean Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Record": {
+      "main": [
+        [
+          {
+            "node": "Append Raw Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Raw Log": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Logs (Daily)": {
+      "main": [
+        [
+          {
+            "node": "Build Daily Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Daily Report": {
+      "main": [
+        [
+          {
+            "node": "Send Daily Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Logs (Weekly)": {
+      "main": [
+        [
+          {
+            "node": "Build Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Weekly Report": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Inbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "bc1b6ed6-95f9-41d2-801a-6e12cce8782c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "24b7edb7e5e5f02deaf8353186d92640ca29861564af1eeac38674993b96337b"
+  },
+  "nodeGroups": [],
+  "id": "7ssxggBvgt7ZIcmH",
+  "tags": []
+}

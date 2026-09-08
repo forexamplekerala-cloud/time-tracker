@@ -1,0 +1,16 @@
+{
+  "name": "Time Audit",
+  "short_name": "Time Audit",
+  "description": "Write your day freely, see your time brutally.",
+  "start_url": "/log",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
