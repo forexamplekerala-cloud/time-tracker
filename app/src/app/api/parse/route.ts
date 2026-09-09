@@ -26,7 +26,8 @@ const parserSchema: Schema = {
           duration_minutes: { type: SchemaType.INTEGER, description: "Number of minutes or null", nullable: true },
           category: { 
             type: SchemaType.STRING, 
-            description: "Must be exactly one of: 'Trading/Deep Work', 'Agency/Business', 'Life/Fuel', 'Distraction', 'Unclear'" 
+            description: "Must be exactly one of: 'Trading/Deep Work', 'Agency/Business', 'Life/Fuel', 'Distraction', 'Unclear'",
+            enum: ['Trading/Deep Work', 'Agency/Business', 'Life/Fuel', 'Distraction', 'Unclear']
           },
           activity: { type: SchemaType.STRING, description: "Short description of the activity" },
           raw_fragment: { type: SchemaType.STRING, description: "The original text fragment this entry corresponds to" },
@@ -53,6 +54,7 @@ export async function POST(req: Request) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
 
     const { text, inputMode = 'text' } = await req.json()
 
