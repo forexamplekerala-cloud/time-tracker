@@ -13,6 +13,7 @@ Next.js + TypeScript (strict) | Tailwind + shadcn/ui | Recharts | Supabase (auth
 - `WhatsApp Time Tracker V1 (6).json` - legacy n8n workflow, reference only, do NOT extend or modify.
 
 ## Hard Rules
+- CRITICAL WORKSPACE: ALWAYS use C:\Users\fawaz\time_mirror\time tracker. Never use Documents copy (Windows Defender blocks git/tools there).
 - Gemini API key lives in server env only - NEVER in client JavaScript; frontend calls own API route.
 - Lost time = explicitly logged Distraction ONLY. Unlogged time is "unknown", never labeled wasted.
 - Parser never invents missing time, never assumes gaps are wasted.
