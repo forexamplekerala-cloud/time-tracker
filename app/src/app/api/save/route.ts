@@ -29,10 +29,8 @@ export async function POST(req: Request) {
       duration_minutes: e.duration_minutes || null,
       category: e.category,
       activity: e.activity,
-      raw_fragment: e.raw_fragment || '',
       source: 'ai',
-      confidence: e.confidence,
-      needs_review: e.needs_review
+      confidence: e.confidence
     }))
 
     const { data: insertedEntries, error: insertError } = await supabase
