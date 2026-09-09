@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI, Schema, SchemaType } from '@google/generative-ai'
+
+export const maxDuration = 30 // Vercel: allow up to 30s for Gemini cold starts
 import { createClient } from '@/utils/supabase/server'
 import { buildParserPrompt } from '@/lib/parser/prompt'
 import { getUserLexicon } from '@/lib/parser/context'
@@ -71,11 +73,11 @@ export async function POST(req: Request) {
     const userLexicon = await getUserLexicon(user.id)
     const prompt = buildParserPrompt(istDateString, userLexicon, inputMode as 'text' | 'voice') + `\n\nUser text:\n"${text}"\n`
 
-    // Timeout logic (8 seconds)
+    // Timeout logic (25 seconds — Gemini needs time on cold starts)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
 
-    const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash'
+    const modelName = process.env.GEMINI_MODEL || 'gemini-3.5-flash'
     const model = genAI.getGenerativeModel({
       model: modelName,
       generationConfig: {
@@ -106,7 +108,7 @@ export async function POST(req: Request) {
             date: istDateString,
             entries: [],
             unparsed_fragments: [text],
-            warnings: ['Parser timeout exceeded 8s']
+            warnings: ['Parser timeout exceeded 25s']
          })
       }
       throw e
