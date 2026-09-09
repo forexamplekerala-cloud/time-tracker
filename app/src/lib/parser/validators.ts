@@ -96,9 +96,22 @@ export function runValidators(
       violations.push('V2_TRACEABILITY_FAIL');
     }
 
-    // V3 Arithmetic
-    const startMins = timeToMinutes(entry.start_time);
-    const endMins = timeToMinutes(entry.end_time);
+    // V3 Arithmetic & Reconstruction
+    let startMins = timeToMinutes(entry.start_time);
+    let endMins = timeToMinutes(entry.end_time);
+    
+    // If LLM hallucinates duration but drops a time field, reconstruct it!
+    if (startMins !== null && endMins === null && entry.duration_minutes) {
+        let eMins = startMins + entry.duration_minutes;
+        if (eMins >= 24 * 60) eMins -= 24 * 60;
+        entry.end_time = `${Math.floor(eMins / 60).toString().padStart(2, '0')}:${(eMins % 60).toString().padStart(2, '0')}`;
+        endMins = eMins;
+    } else if (endMins !== null && startMins === null && entry.duration_minutes) {
+        let sMins = endMins - entry.duration_minutes;
+        if (sMins < 0) sMins += 24 * 60;
+        entry.start_time = `${Math.floor(sMins / 60).toString().padStart(2, '0')}:${(sMins % 60).toString().padStart(2, '0')}`;
+        startMins = sMins;
+    }
     
     if (startMins !== null && endMins !== null) {
       let calcDuration = endMins - startMins;
@@ -107,6 +120,17 @@ export function runValidators(
       if (entry.duration_minutes !== null && calcDuration !== entry.duration_minutes) {
          violations.push('V3_ARITHMETIC_MISMATCH');
       }
+    }
+
+    // Deduplication check
+    const isDuplicate = finalEntries.some(e => 
+      e.start_time === entry.start_time && 
+      e.end_time === entry.end_time && 
+      e.activity === entry.activity
+    );
+
+    if (isDuplicate) {
+      continue;
     }
 
     // V4 No invented time (Grace mode for voice input handled by prompt, but we can do a strict check here)
