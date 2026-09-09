@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI, Schema, Type } from '@google/generative-ai'
+import { GoogleGenerativeAI, Schema } from '@google/generative-ai'
 import { createClient } from '@/utils/supabase/server'
 import { buildParserPrompt } from '@/lib/parser/prompt'
 import { getUserLexicon } from '@/lib/parser/context'
@@ -8,35 +8,35 @@ import { runValidators } from '@/lib/parser/validators'
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
 const parserSchema: Schema = {
-  type: Type.OBJECT,
+  type: 'object',
   properties: {
     date: {
-      type: Type.STRING,
+      type: 'string',
       description: "YYYY-MM-DD date format. Must strictly be the today date passed in the prompt."
     },
     entries: {
-      type: Type.ARRAY,
+      type: 'array',
       items: {
-        type: Type.OBJECT,
+        type: 'object',
         properties: {
-          start_time: { type: Type.STRING, description: "HH:MM (24-hour format) or null if only duration is known", nullable: true },
-          end_time: { type: Type.STRING, description: "HH:MM (24-hour format) or null if only duration is known", nullable: true },
-          duration_minutes: { type: Type.INTEGER, description: "Number of minutes or null", nullable: true },
+          start_time: { type: 'string', description: "HH:MM (24-hour format) or null if only duration is known", nullable: true },
+          end_time: { type: 'string', description: "HH:MM (24-hour format) or null if only duration is known", nullable: true },
+          duration_minutes: { type: 'integer', description: "Number of minutes or null", nullable: true },
           category: { 
-            type: Type.STRING, 
+            type: 'string', 
             description: "Must be exactly one of: 'Trading/Deep Work', 'Agency/Business', 'Life/Fuel', 'Distraction', 'Unclear'" 
           },
-          activity: { type: Type.STRING, description: "Short description of the activity" },
-          raw_fragment: { type: Type.STRING, description: "The original text fragment this entry corresponds to" },
-          confidence: { type: Type.STRING, description: "high, medium, or low" },
-          needs_review: { type: Type.BOOLEAN, description: "True if range is incomplete, overlapping, or uncertain" }
+          activity: { type: 'string', description: "Short description of the activity" },
+          raw_fragment: { type: 'string', description: "The original text fragment this entry corresponds to" },
+          confidence: { type: 'string', description: "high, medium, or low" },
+          needs_review: { type: 'boolean', description: "True if range is incomplete, overlapping, or uncertain" }
         },
         required: ["category", "activity", "raw_fragment", "confidence", "needs_review"]
       }
     },
     unparsed_fragments: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
+      type: 'array',
+      items: { type: 'string' },
       description: "Text fragments referencing non-today dates (e.g. 'yesterday evening') or that could not be parsed."
     }
   },
