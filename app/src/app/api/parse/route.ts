@@ -21,8 +21,8 @@ const parserSchema: Schema = {
       items: {
         type: SchemaType.OBJECT,
         properties: {
-          start_time: { type: SchemaType.STRING, description: "HH:MM (24-hour format) or null if only duration is known", nullable: true },
-          end_time: { type: SchemaType.STRING, description: "HH:MM (24-hour format) or null if only duration is known", nullable: true },
+          start_time: { type: SchemaType.STRING, description: "HH:MM (24-hour format). Set to null ONLY if completely missing from user input.", nullable: true },
+          end_time: { type: SchemaType.STRING, description: "HH:MM (24-hour format). Set to null ONLY if completely missing from user input.", nullable: true },
           duration_minutes: { type: SchemaType.INTEGER, description: "Number of minutes or null", nullable: true },
           category: { 
             type: SchemaType.STRING, 

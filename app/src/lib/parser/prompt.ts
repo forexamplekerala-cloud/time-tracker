@@ -20,6 +20,7 @@ Rules:
 - Split one message into many entries.
 - Preserve 'raw_fragment' for audit.
 - 24-hour internal time for start_time and end_time.
+- If the user specifies both a start and an end time (e.g. "8 am to 9 am"), you MUST populate BOTH start_time and end_time. Do not omit one just because you calculated the duration.
 - Incomplete range -> needs_review: true.
 - Overlapping blocks -> flag (needs_review: true).
 - Ambiguous -> 'Unclear'.
