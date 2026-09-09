@@ -81,6 +81,16 @@ export function runValidators(
       continue;
     }
 
+    // V7.5: Sanitize times to prevent UI overflow from LLM repetition loops (e.g. 08:000000000...)
+    if (entry.start_time) {
+      const startMatch = entry.start_time.match(/^(\d{1,2}:\d{2})/);
+      entry.start_time = startMatch ? startMatch[1].padStart(5, '0') : null;
+    }
+    if (entry.end_time) {
+      const endMatch = entry.end_time.match(/^(\d{1,2}:\d{2})/);
+      entry.end_time = endMatch ? endMatch[1].padStart(5, '0') : null;
+    }
+
     // V2 Traceability
     if (!checkTraceability(input, entry.raw_fragment)) {
       violations.push('V2_TRACEABILITY_FAIL');
