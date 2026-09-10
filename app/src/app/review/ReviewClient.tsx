@@ -163,7 +163,7 @@ export default function ReviewClient() {
               <div className="text-ink mb-4">{entry.activity}</div>
               
               <div className="mb-4">
-                <p className="text-xs font-medium text-ink-muted mb-2">Impact on your goals?</p>
+                <p className="text-xs font-medium text-ink-muted mb-2">How did this serve your goals? (never changes your category)</p>
                 <div className="flex gap-2">
                   <button 
                     onClick={() => setImpactRating(entry.id!, 'good')}

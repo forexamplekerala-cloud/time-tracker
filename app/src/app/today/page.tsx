@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { getTruthLine } from '@/lib/dashboard/truth'
+import { resolveDurationMinutes } from '@/lib/entries/summary'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import TimelineList from './TimelineList'
@@ -38,26 +39,38 @@ export default async function TodayPage({
   
   const canGoForward = !isToday
 
-  // Fetch summaries
-  const { data: summary } = await supabase
-    .from('daily_summaries')
-    .select('*')
-    .eq('date', targetDateStr)
-    .single()
-
-  // Fetch entries for the timeline
+  // Compute totals live from entries (source of truth) — daily_summaries is only a cache
   const { data: entries } = await supabase
     .from('time_entries')
     .select('*')
     .eq('date', targetDateStr)
     .order('created_at', { ascending: true })
 
-  const prod = summary?.productive_minutes || 0
-  const dist = summary?.distraction_minutes || 0
-  const fuel = summary?.fuel_minutes || 0
-  const totalLogged = prod + dist + fuel
-  
-  const truthLine = getTruthLine(dist, prod, isToday)
+  let prod = 0, dist = 0, fuel = 0, unclear = 0
+  for (const e of (entries || []) as any[]) {
+    const mins = resolveDurationMinutes(e.duration_minutes, e.start_time, e.end_time) || 0
+    if (e.category === 'Trading/Deep Work' || e.category === 'Agency/Business') prod += mins
+    else if (e.category === 'Distraction') dist += mins
+    else if (e.category === 'Life/Fuel') fuel += mins
+    else if (e.category === 'Unclear') unclear += mins
+  }
+  // Unclear time IS logged — never counted as unlogged
+  const totalLogged = prod + dist + fuel + unclear
+
+  const fmt = (mins: number) => `${Math.floor(mins/60)}h ${mins%60}m`
+
+  const istHm = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(now).split(':').map(Number)
+  const elapsedIstMinutes = istHm[0] * 60 + istHm[1]
+  const unlogged = isToday
+    ? Math.max(0, elapsedIstMinutes - totalLogged)
+    : Math.max(0, 24 * 60 - totalLogged)
+
+  const truthLine = getTruthLine(dist, prod, fuel, isToday)
 
   const displayTitle = isToday ? "Today's Audit" : `${targetDateStr} Audit`
 
@@ -83,11 +96,19 @@ export default async function TodayPage({
       <div className="grid grid-cols-2 gap-4 mb-8">
         <div className="p-4 bg-surface border border-border rounded-md">
           <p className="text-sm text-ink-muted mb-1">Productive</p>
-          <p className="text-2xl font-mono text-[#16A34A]">{Math.floor(prod/60)}h {prod%60}m</p>
+          <p className="text-2xl font-mono text-[#16A34A]">{fmt(prod)}</p>
         </div>
         <div className="p-4 bg-surface border border-border rounded-md">
-          <p className="text-sm text-ink-muted mb-1">Distraction</p>
-          <p className="text-2xl font-mono text-[#DC2626]">{Math.floor(dist/60)}h {dist%60}m</p>
+          <p className="text-sm text-ink-muted mb-1">Lost</p>
+          <p className="text-2xl font-mono text-[#DC2626]">{fmt(dist)}</p>
+        </div>
+        <div className="p-4 bg-surface border border-border rounded-md">
+          <p className="text-sm text-ink-muted mb-1">Fuel</p>
+          <p className="text-2xl font-mono text-[#F59E0B]">{fmt(fuel)}</p>
+        </div>
+        <div className="p-4 bg-surface border border-border rounded-md">
+          <p className="text-sm text-ink-muted mb-1">Unlogged</p>
+          <p className="text-2xl font-mono text-[#A1A1AA]">{fmt(unlogged)}</p>
         </div>
       </div>
 

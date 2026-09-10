@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { ChevronRight } from 'lucide-react'
 
 type Entry = {
   id: string
   category: string
   activity: string
-  raw_fragment: string
+  raw_fragment: string | null
   duration_minutes: number | null
   start_time: string | null
   end_time: string | null
@@ -24,6 +25,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 export default function TimelineList({ initialEntries }: { initialEntries: Entry[] }) {
   const router = useRouter()
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const formatDuration = (mins: number | null, start: string | null, end: string | null) => {
     let m = mins || 0
@@ -59,9 +61,11 @@ export default function TimelineList({ initialEntries }: { initialEntries: Entry
     try {
       const res = await fetch(`/api/entries/${entry.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete')
-      
+
       const params = new URLSearchParams()
-      params.set('reparse', entry.raw_fragment)
+      if (entry.raw_fragment) {
+        params.set('reparse', entry.raw_fragment)
+      }
       router.push(`/log?${params.toString()}`)
     } catch (e) {
       console.error(e)
@@ -84,29 +88,47 @@ export default function TimelineList({ initialEntries }: { initialEntries: Entry
       {initialEntries.map(entry => {
         const colorClass = CATEGORY_COLORS[entry.category] || CATEGORY_COLORS['Unclear']
         const duration = formatDuration(entry.duration_minutes, entry.start_time, entry.end_time)
-        
+        const isExpanded = expandedId === entry.id
+
         return (
           <div key={entry.id} className={`p-4 bg-surface border border-border rounded-md relative ${loadingId === entry.id ? 'opacity-50 pointer-events-none' : ''}`}>
             <div className="flex justify-between items-start mb-2">
               <span className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full border ${colorClass}`}>
                 {entry.category}
               </span>
-              <div className="flex gap-2 text-ink-muted">
-                <button onClick={() => handleEdit(entry)} className="hover:text-ink transition-colors" title="Edit text">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                </button>
-                <button onClick={() => handleDelete(entry.id)} className="hover:text-red-500 transition-colors" title="Delete entry">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                </button>
-              </div>
+              <button
+                onClick={() => setExpandedId(isExpanded ? null : entry.id)}
+                className="p-1.5 -mr-1.5 -mt-1 rounded-full text-ink-muted hover:text-ink hover:bg-[#F4F4F5] transition-colors"
+                title={isExpanded ? 'Hide actions' : 'Entry actions'}
+                aria-expanded={isExpanded}
+              >
+                <ChevronRight className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+              </button>
             </div>
-            
+
             <p className="text-base text-ink font-medium mb-1">{entry.activity}</p>
-            
+
             <div className="flex justify-between items-end mt-2">
-              <p className="text-xs text-ink-muted italic line-clamp-2 pr-4 w-4/5">"{entry.raw_fragment}"</p>
+              {entry.raw_fragment ? (
+                <p className="text-xs text-ink-muted italic line-clamp-2 pr-4 w-4/5">"{entry.raw_fragment}"</p>
+              ) : (
+                <span />
+              )}
               <span className="text-sm font-mono text-ink shrink-0">{duration}</span>
             </div>
+
+            {isExpanded && (
+              <div className="flex gap-5 justify-end items-center border-t border-border mt-3 pt-3">
+                <button onClick={() => handleEdit(entry)} className="flex items-center gap-1.5 text-xs font-medium text-ink-muted hover:text-ink transition-colors" title="Edit text">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  Edit
+                </button>
+                <button onClick={() => handleDelete(entry.id)} className="flex items-center gap-1.5 text-xs font-medium text-ink-muted hover:text-red-500 transition-colors" title="Delete entry">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                  Delete
+                </button>
+              </div>
+            )}
           </div>
         )
       })}

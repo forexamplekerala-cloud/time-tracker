@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { recomputeDailySummary } from '@/lib/entries/summary'
 
 export async function DELETE(
   req: Request,
@@ -61,38 +62,10 @@ export async function DELETE(
     }
 
     // 4. Recompute daily_summaries for the date of the deleted entry
-    const { data: allEntriesForDay } = await supabase
-      .from('time_entries')
-      .select('category, duration_minutes')
-      .eq('user_id', user.id)
-      .eq('date', entryData.date)
-
-    let productive = 0, distraction = 0, fuel = 0
-    if (allEntriesForDay) {
-      allEntriesForDay.forEach((e: any) => {
-        const mins = parseInt(e.duration_minutes || '0', 10)
-        if (e.category === 'Trading/Deep Work' || e.category === 'Agency/Business') productive += mins
-        if (e.category === 'Distraction') distraction += mins
-        if (e.category === 'Life/Fuel') fuel += mins
-      })
-    }
-
-    const { error: upsertError } = await supabase
-      .from('daily_summaries')
-      .upsert(
-        { 
-          user_id: user.id, 
-          date: entryData.date, 
-          productive_minutes: productive, 
-          distraction_minutes: distraction, 
-          fuel_minutes: fuel,
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: 'user_id,date' }
-      )
-
-    if (upsertError) {
-      console.error('Error updating daily_summary after deletion:', upsertError)
+    try {
+      await recomputeDailySummary(supabase, user.id, entryData.date)
+    } catch (e: any) {
+      console.error('Error updating daily_summary after deletion:', e.message)
     }
 
     return NextResponse.json({ success: true })

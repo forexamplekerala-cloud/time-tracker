@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
+import { recomputeDailySummary } from '@/lib/entries/summary'
 
 export async function POST(req: Request) {
   try {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -16,21 +17,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid data' }, { status: 400 })
     }
 
-    // 1. Overlap Check (simplified for now, ideally in SQL or complex logic)
-    // We'll trust the review screen's output for Phase 1 MVP, but the plan asked for a check.
-    // In Phase 1, we just insert them. Overlaps are okay if user confirms them.
-    
-    // 2. Insert time entries
     const entriesToInsert = entries.map((e: any) => ({
       user_id: user.id,
       date,
       start_time: e.start_time || null,
       end_time: e.end_time || null,
-      duration_minutes: e.duration_minutes || null,
+      duration_minutes: typeof e.duration_minutes === 'number' ? e.duration_minutes : null,
       category: e.category,
       activity: e.activity,
       source: 'ai',
-      confidence: e.confidence
+      confidence: e.confidence,
+      needs_review: typeof e.needs_review === 'boolean' ? e.needs_review : null,
+      impact_rating: (e.impact_rating === 'good' || e.impact_rating === 'mid' || e.impact_rating === 'bad') ? e.impact_rating : null
     }))
 
     const { data: insertedEntries, error: insertError } = await supabase
@@ -43,64 +41,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Failed to insert entries' }, { status: 500 })
     }
 
-    // 3 & 4. Parallelize feedback insert and all-entries select to reduce latency round-trips
+    // Feedback rows for entries the user corrected or flagged; summary recompute runs in parallel.
     const feedbackEntries = entries.filter((e: any) => e.ai_misread || e.edited)
-    const feedbackPromise = feedbackEntries.length > 0 
+    const feedbackPromise = feedbackEntries.length > 0
       ? supabase.from('ai_feedback').insert(
           feedbackEntries.map((e: any, index: number) => ({
             entry_id: insertedEntries.find(dbE => dbE.activity === e.activity && dbE.category === e.category)?.id || insertedEntries[index].id,
             accepted: false,
-            corrected_fields: { 
+            corrected_fields: {
               note: e.ai_misread ? "Marked as misread by user" : "Edited by user",
-              violations: e.violations || []
+              violations: e.violations || [],
+              impact_rating: e.impact_rating ?? null
             }
           }))
         )
       : Promise.resolve({ error: null })
 
-    const entriesPromise = supabase
-      .from('time_entries')
-      .select('category, duration_minutes')
-      .eq('user_id', user.id)
-      .eq('date', date)
-
-    const [feedbackResult, entriesResult] = await Promise.all([feedbackPromise, entriesPromise])
+    const [feedbackResult, summary] = await Promise.all([
+      feedbackPromise,
+      recomputeDailySummary(supabase, user.id, date)
+    ])
 
     if (feedbackResult.error) {
       console.error('Error inserting ai_feedback:', feedbackResult.error)
     }
 
-    const { data: allEntriesForDay } = entriesResult
-
-    let productive = 0, distraction = 0, fuel = 0
-    if (allEntriesForDay) {
-      allEntriesForDay.forEach((e: any) => {
-        const mins = parseInt(e.duration_minutes || '0', 10)
-        if (e.category === 'Trading/Deep Work' || e.category === 'Agency/Business') productive += mins
-        if (e.category === 'Distraction') distraction += mins
-        if (e.category === 'Life/Fuel') fuel += mins
-      })
-    }
-
-    const { error: upsertError } = await supabase
-      .from('daily_summaries')
-      .upsert(
-        { 
-          user_id: user.id, 
-          date, 
-          productive_minutes: productive, 
-          distraction_minutes: distraction, 
-          fuel_minutes: fuel,
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: 'user_id,date' }
-      )
-
-    if (upsertError) {
-      console.error('Error upserting daily_summary:', upsertError)
-    }
-
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, summary })
   } catch (error) {
     console.error('Error saving data:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
