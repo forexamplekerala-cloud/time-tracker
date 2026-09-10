@@ -97,6 +97,52 @@ const parsedData = JSON.parse(cleaned)
 
 ---
 
+## BUG-007 — Truth line and scoreboard blind to Fuel; stale daily_summaries showed "No time logged yet"
+**STATUS**: FIXED
+**FILE**: `app/src/lib/dashboard/truth.ts` line 7, `app/src/app/today/page.tsx` lines 55-92
+**SYMPTOM**: Fuel-only day (gym 1h30m) shows "No time logged yet." and 0h 0m everywhere, while the timeline lists the gym entry. Fuel appears in no card.
+**ROOT CAUSE**: Two compounding bugs. (1) `getTruthLine` treated `distraction===0 && productive===0` as "nothing logged" — Fuel wasn't a parameter. (2) The page read totals from `daily_summaries`, which was stale/zero because the save route's `parseInt(duration_minutes || '0')` counted null-duration entries as 0 (gym had start/end but null duration). The timeline computed duration from start/end for display, so card and summary disagreed.
+**FIX**: (1) `getTruthLine(dist, prod, fuel, isToday)` with fuel-aware deterministic templates. (2) Today page computes totals LIVE from `time_entries` via `resolveDurationMinutes` (duration ?? start/end math) — `daily_summaries` is now only a cache for week views. Four cards: Productive / Lost / Fuel / Unlogged per visuals-spec §1. Unclear minutes count as logged (never unlogged, never lost).
+**FAILED ATTEMPTS**: None — root cause traced before editing.
+**AI PROCESS**: User screenshot showed timeline entry + zero summary → the two components read different sources → inspected both paths → found parseInt-null bug + fuel-blind template together.
+
+---
+
+## BUG-008 — good/mid/bad impact rating silently discarded on save
+**STATUS**: FIXED
+**FILE**: `app/src/app/api/save/route.ts` lines 24-34 (old)
+**SYMPTOM**: User tags an entry "Good" on review; nothing changes anywhere; rating is never stored.
+**ROOT CAUSE**: `impact_rating` lived only in ReviewClient state; the save route's insert payload never included it. (DB column `time_entries.impact_rating` already existed and was never written.)
+**FIX**: Insert `impact_rating` (validated to good/mid/bad/null) and `needs_review` on `time_entries`; also mirrored into `ai_feedback.corrected_fields.impact_rating` when feedback rows are written. Review hint relabeled to "How did this serve your goals? (never changes your category)" so users don't expect it to change the category. NOTE: rating is a learning signal — it never alters category or summary math (Fuel never inflates productive hours).
+**FAILED ATTEMPTS**: None.
+**AI PROCESS**: Grepped save payload vs ReviewClient state → field dropped between client and route → verified column exists via live schema introspection before writing.
+
+---
+
+## BUG-009 — Duration math inconsistency: parseInt vs start/end fallback; unlogged never computed
+**STATUS**: FIXED
+**FILE**: `app/src/app/api/save/route.ts` line 78, `app/src/app/api/entries/[id]/route.ts` line 73 (old)
+**SYMPTOM**: Entries with null duration but valid times count as 0m in daily summaries while the timeline displays their real duration. `unlogged_minutes` column exists but was never written.
+**ROOT CAUSE**: Both routes used `parseInt(e.duration_minutes || '0', 10)` — no fallback to end−start, and the actual DB stores duration as number not string.
+**FIX**: New shared helper `app/src/lib/entries/summary.ts` (`resolveDurationMinutes` + `recomputeDailySummary`) used by both routes and the Today page. Same math everywhere; upserts `unlogged_minutes` (1440 − all logged buckets incl. Unclear). Also removed the duplicated ~35-line summary block from the delete route.
+**FAILED ATTEMPTS**: None.
+**AI PROCESS**: Compared timeline's display math vs summary math → found the divergence → extracted one helper, three consumers.
+
+---
+
+## BUG-010 — `raw_fragment` not persisted in `time_entries`
+**STATUS**: OPEN (needs one-line ALTER by user — no direct Postgres access from app env)
+**FILE**: `app/src/app/api/save/route.ts` (insert payload), `app/src/app/today/TimelineList.tsx`
+**SYMPTOM**: Timeline cards show empty `""` quote line; Edit-reparse navigates to /log with no prefilled text.
+**ROOT CAUSE**: Live schema introspection confirmed `time_entries` has no `raw_fragment` column (docs listed it aspirationally). The parser produces it; the save route can't store what the table lacks.
+**FIX (pending)**: Run in Supabase SQL editor:
+`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS raw_fragment text;`
+Then add `raw_fragment: e.raw_fragment || null` to the save insert. UI already softened: empty quote line hidden; Edit skips the reparse param when empty.
+**FAILED ATTEMPTS**: None — deliberately NOT adding the column to the insert before the ALTER exists, because PostgREST would 400 every save.
+**AI PROCESS**: Sampled one row per table via service key → column list lacked raw_fragment → chose display-side mitigation + user-run migration over breaking saves.
+
+---
+
 ## PATTERN LIBRARY — Do Not Try These
 
 | What looks tempting | Why it fails |
