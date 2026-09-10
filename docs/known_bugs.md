@@ -143,6 +143,28 @@ Then add `raw_fragment: e.raw_fragment || null` to the save insert. UI already s
 
 ---
 
+## BUG-011 — Entry deletion aborted by ai_feedback cleanup failure
+**STATUS**: FIXED
+**FILE**: `app/src/app/api/entries/[id]/route.ts` lines 48-51 (old)
+**SYMPTOM**: Delete fails with 500 "Failed to delete linked feedback"; entry stays on the timeline; daily summary never recomputed.
+**ROOT CAUSE**: The route returned 500 early when the ai_feedback cleanup errored — treating a best-effort side cleanup as a blocker for the primary operation (entry deletion).
+**FIX**: Downgraded feedback cleanup failure to `console.error` and continued to entry deletion + summary recompute.
+**FAILED ATTEMPTS**: None.
+**AI PROCESS**: Read the delete flow end-to-end → noticed control flow made optional cleanup gate the primary delete → reordered severity.
+
+---
+
+## BUG-012 — Edit flow deleted the entry but opened an empty log box
+**STATUS**: FIXED
+**FILE**: `app/src/app/log/page.tsx`, `app/src/app/log/LogInput.tsx`
+**SYMPTOM**: Clicking Edit on a timeline entry removes it, then /log shows an empty textarea — original text lost.
+**ROOT CAUSE**: TimelineList correctly builds `?reparse=<fragment>`, but `log/page.tsx` didn't accept `searchParams` and `LogInput` took no props, so the param was read by nobody.
+**FIX**: `LogPage` accepts `searchParams.reparse` and passes it as `initialText` to `LogInput`, which seeds `useState(initialText)`.
+**FAILED ATTEMPTS**: None.
+**AI PROCESS**: Traced the Edit button's router.push target → checked the destination page's props → param never consumed. (Note: until BUG-010's `raw_fragment` column exists, reparse only has text for entries created before the column gap; the param is simply empty for affected rows.)
+
+---
+
 ## PATTERN LIBRARY — Do Not Try These
 
 | What looks tempting | Why it fails |

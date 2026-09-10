@@ -1,9 +1,13 @@
 import LogInput from './LogInput'
 import { createClient } from '@/utils/supabase/server'
 
-export default async function LogPage() {
+export default async function LogPage({
+  searchParams
+}: {
+  searchParams: { reparse?: string }
+}) {
   const supabase = createClient()
-  
+
   // Example server-issued IST date
   // Real implementation: get IST date correctly
   const now = new Date()
@@ -19,10 +23,10 @@ export default async function LogPage() {
       <header className="py-4">
         <p className="text-sm font-medium text-ink-muted">{istDateString}</p>
       </header>
-      
+
       <main className="flex-1 flex flex-col pt-4">
         <h1 className="text-lg text-ink font-medium mb-6">What actually happened today?</h1>
-        <LogInput />
+        <LogInput initialText={searchParams.reparse || ''} />
       </main>
     </div>
   )

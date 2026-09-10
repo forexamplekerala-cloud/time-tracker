@@ -10,8 +10,8 @@ const CHIPS = [
   "Last 1 hour mostly phone"
 ]
 
-export default function LogInput() {
-  const [text, setText] = useState('')
+export default function LogInput({ initialText = '' }: { initialText?: string }) {
+  const [text, setText] = useState(initialText)
   const [isParsing, setIsParsing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)

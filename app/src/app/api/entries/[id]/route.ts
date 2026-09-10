@@ -45,9 +45,9 @@ export async function DELETE(
       .delete()
       .eq('entry_id', id)
 
+    // Best-effort: a feedback cleanup failure must not block the entry deletion
     if (feedbackError) {
-      console.error('Error deleting ai_feedback:', feedbackError)
-      return NextResponse.json({ error: 'Failed to delete linked feedback' }, { status: 500 })
+      console.error('Error deleting ai_feedback (continuing):', feedbackError)
     }
 
     // 3. Delete the actual entry
