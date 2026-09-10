@@ -17,6 +17,8 @@ type ParsedEntry = {
   needs_review: boolean;
   violations?: string[];
   ai_misread?: boolean;
+  impact_rating?: 'good' | 'mid' | 'bad' | null;
+  edited?: boolean;
 }
 
 const categoryColors: Record<string, { bg: string, text: string, dot: string }> = {
@@ -52,6 +54,17 @@ export default function ReviewClient() {
     setEntries(prev => prev.map(e => e.id === id ? { ...e, ai_misread: !e.ai_misread } : e))
   }
 
+  const setImpactRating = (id: string, rating: 'good' | 'mid' | 'bad') => {
+    setEntries(prev => prev.map(e => e.id === id ? { 
+      ...e, 
+      impact_rating: e.impact_rating === rating ? null : rating 
+    } : e))
+  }
+
+  const setCategory = (id: string, newCategory: string) => {
+    setEntries(prev => prev.map(e => e.id === id ? { ...e, category: newCategory, edited: true } : e))
+  }
+
   const handleDelete = (id: string) => {
     setEntries(prev => prev.filter(e => e.id !== id))
   }
@@ -76,7 +89,17 @@ export default function ReviewClient() {
   }
 
   if (entries.length === 0 && unparsed.length === 0) {
-    return <p className="text-ink-muted">No data to review. Go back and log something.</p>
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-center">
+        <p className="text-ink-muted mb-4">No data to review right now.</p>
+        <button 
+          onClick={() => router.push('/today')} 
+          className="px-6 py-2 bg-[#F4F4F5] text-ink rounded-md font-medium hover:bg-[#E4E4E7] transition-colors"
+        >
+          Back to Timeline
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -95,7 +118,14 @@ export default function ReviewClient() {
       <div className="flex flex-col gap-4 mb-8">
         {entries.map((entry) => {
           const colors = categoryColors[entry.category] || categoryColors['Unclear']
-          const formatTime = (t: string | null) => t ? t : '--:--'
+          const formatTime = (t: string | null) => {
+            if (!t) return '--:--'
+            const [h, m] = t.split(':').map(Number)
+            if (isNaN(h) || isNaN(m)) return t
+            const period = h >= 12 ? 'PM' : 'AM'
+            const h12 = h % 12 || 12
+            return `${h12}:${m.toString().padStart(2, '0')} ${period}`
+          }
           
           return (
             <div key={entry.id} className={clsx("p-4 bg-surface border rounded-md shadow-sm", entry.needs_review ? "border-amber-400 ring-1 ring-amber-400" : "border-border")}>
@@ -105,9 +135,16 @@ export default function ReviewClient() {
                     {formatTime(entry.start_time)} – {formatTime(entry.end_time)}
                   </div>
                   {entry.violations && entry.violations.length > 0 && (
-                    <span className="text-[10px] uppercase font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded flex items-center gap-1">
-                      <AlertCircle size={12} /> Check me
-                    </span>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {entry.violations.includes('V9_FUTURE_END_TIME') && (
+                        <span className="text-[10px] uppercase font-bold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded flex items-center gap-1">
+                          ⏰ End time was future
+                        </span>
+                      )}
+                      <span className="text-[10px] uppercase font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <AlertCircle size={12} /> Check me
+                      </span>
+                    </div>
                   )}
                 </div>
                 {entry.duration_minutes && (
@@ -125,10 +162,43 @@ export default function ReviewClient() {
 
               <div className="text-ink mb-4">{entry.activity}</div>
               
+              <div className="mb-4">
+                <p className="text-xs font-medium text-ink-muted mb-2">Impact on your goals?</p>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setImpactRating(entry.id!, 'good')}
+                    className={clsx("flex-1 py-1.5 rounded text-xs font-medium border transition-colors", entry.impact_rating === 'good' ? "bg-green-100 border-green-300 text-green-800" : "bg-surface border-border text-ink hover:bg-[#F4F4F5]")}
+                  >
+                    {entry.impact_rating === 'good' ? '✓ Good' : 'Good'}
+                  </button>
+                  <button 
+                    onClick={() => setImpactRating(entry.id!, 'mid')}
+                    className={clsx("flex-1 py-1.5 rounded text-xs font-medium border transition-colors", entry.impact_rating === 'mid' ? "bg-amber-100 border-amber-300 text-amber-800" : "bg-surface border-border text-ink hover:bg-[#F4F4F5]")}
+                  >
+                    {entry.impact_rating === 'mid' ? '~ Mid' : 'Mid'}
+                  </button>
+                  <button 
+                    onClick={() => setImpactRating(entry.id!, 'bad')}
+                    className={clsx("flex-1 py-1.5 rounded text-xs font-medium border transition-colors", entry.impact_rating === 'bad' ? "bg-red-100 border-red-300 text-red-800" : "bg-surface border-border text-ink hover:bg-[#F4F4F5]")}
+                  >
+                    {entry.impact_rating === 'bad' ? '✗ Bad' : 'Bad'}
+                  </button>
+                </div>
+              </div>
+              
               <div className="flex justify-between items-center">
-                <div className={clsx("flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium", colors.bg, colors.text)}>
-                  <div className={clsx("w-2 h-2 rounded-full", colors.dot)}></div>
-                  {entry.category}
+                <div className={clsx("flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium relative focus-within:ring-2 focus-within:ring-ink transition-all", colors.bg, colors.text)}>
+                  <div className={clsx("w-2 h-2 rounded-full shrink-0", colors.dot)}></div>
+                  <select 
+                    value={entry.category} 
+                    onChange={(e) => setCategory(entry.id!, e.target.value)}
+                    className={clsx("appearance-none bg-transparent border-none outline-none cursor-pointer pr-4 font-medium", colors.text)}
+                  >
+                    {Object.keys(categoryColors).map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                  <svg className="w-3 h-3 absolute right-2 pointer-events-none opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                 </div>
                 
                 <div className="flex items-center gap-3">

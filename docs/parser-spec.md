@@ -6,6 +6,8 @@
   - Split one message into many entries
   - Preserve `raw_fragment` for audit
   - 24-hour internal time
+  - 12-hour to 24-hour conversion exactly: "9 am" -> 09:00, "9 pm" -> 21:00, noon 12:00, midnight 00:00
+  - Explicit start AND end in input -> both MUST be populated; duration must equal end - start
   - `duration_minutes` number-or-null
   - Incomplete range -> `needs_review: true`
   - Overlapping blocks -> flag

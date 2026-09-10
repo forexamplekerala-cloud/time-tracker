@@ -5,7 +5,12 @@
 Next.js + TypeScript (strict) | Tailwind + shadcn/ui | Recharts | Supabase (auth + Postgres + RLS) | Gemini Flash via server route only | Vercel/Cloudflare | PWA manifest + service worker. App code lives in `app/`.
 
 ## Commands
-*Placeholder for dev/test/lint after scaffolding (`npm run dev`, etc. inside `app/`).*
+All run inside `app/`:
+- Dev: `npm run dev` (http://localhost:3001)
+- Type-check: `npx tsc --noEmit`
+- Build (run before claiming any change works): `npm run build`
+- Lint: `npm run lint`
+- No test suite exists yet - a green build + manual check IS the verification bar.
 
 ## Repo Layout
 - `app/` - the Next.js PWA lives here (scaffold pending).
@@ -25,6 +30,9 @@ Next.js + TypeScript (strict) | Tailwind + shadcn/ui | Recharts | Supabase (auth
 - Privacy: Supabase row-level security; each user sees only their own data. No public feed, no sharing.
 - 24-hour time internally; IST (Asia/Kolkata) for display.
 - Productive time = Trading/Deep Work + Agency/Business only. Fuel never inflates productive hours.
+- **HARD STOP**: Before writing any code to fix a bug, you MUST invoke the `fix_before_touch` skill. You cannot write code until its checklist is complete.
+- **HYPOTHESIS RULE**: Before any code edit, state: (a) what I believe the bug is, (b) which line/file proves it, (c) how I'll verify the fix.
+- **BUG LOGGING**: After fixing any bug, you MUST append an entry to `docs/known_bugs.md`.
 
 ## Category -> Color Map
 | Category | Meaning | Color |
@@ -37,11 +45,13 @@ Next.js + TypeScript (strict) | Tailwind + shadcn/ui | Recharts | Supabase (auth
 
 ## Doc Map (Retrieval Pointers)
 - Before touching the Gemini parser or review flow -> read `docs/parser-spec.md`
+- Before touching ANY parser/API route -> read `docs/known_bugs.md`
 - Before touching Supabase schema, queries, or auth -> read `docs/data-model.md`
 - Before building dashboard/timeline/charts -> read `docs/visuals-spec.md`
 - Before adding ANY new feature -> read `docs/scope-guardrails.md` first
 - Before styling UI components -> read `docs/design-input-screen.md`
 - Full philosophy & 14-day plan -> `docs/product-plan.md`
+- When user types `update !!` -> read `docs/future-updates.md` and execute it
 
 ## Maintenance Protocol
 - Agent makes the same mistake twice -> add one line to AGENTS.md.

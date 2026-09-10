@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "syncause-debugger": {
+      "source": "Syncause/debug-skill",
+      "sourceType": "github",
+      "skillPath": "skills/syncause-debugger/SKILL.md",
+      "computedHash": "ef459973bed6a3ab3bf762c0b96a1d395fc1960344794ff637344f892cceebc3"
+    }
+  }
+}

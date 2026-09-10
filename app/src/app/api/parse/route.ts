@@ -3,7 +3,7 @@ import { GoogleGenerativeAI, Schema, SchemaType } from '@google/generative-ai'
 
 export const maxDuration = 30 // Vercel: allow up to 30s for Gemini cold starts
 import { createClient } from '@/utils/supabase/server'
-import { buildParserPrompt } from '@/lib/parser/prompt'
+import { buildParserSystemInstruction, buildParserUserMessage } from '@/lib/parser/prompt'
 import { getUserLexicon } from '@/lib/parser/context'
 import { runValidators } from '@/lib/parser/validators'
 
@@ -71,9 +71,11 @@ export async function POST(req: Request) {
       day: '2-digit',
     }).format(now).split('/').reverse().join('-')
 
-    // Context Assembly
+    // Context Assembly: role/rules/examples live in the system instruction,
+    // only the raw user text goes in the user turn.
     const userLexicon = await getUserLexicon(user.id)
-    const prompt = buildParserPrompt(istDateString, userLexicon, inputMode as 'text' | 'voice') + `\n\nUser text:\n"${text}"\n`
+    const systemInstruction = buildParserSystemInstruction(istDateString, userLexicon, inputMode as 'text' | 'voice')
+    const userMessage = buildParserUserMessage(text)
 
     // Timeout logic (25 seconds — Gemini needs time on cold starts)
     const controller = new AbortController();
@@ -82,6 +84,7 @@ export async function POST(req: Request) {
     const modelName = process.env.GEMINI_MODEL || 'gemini-3.5-flash'
     const model = genAI.getGenerativeModel({
       model: modelName,
+      systemInstruction,
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: parserSchema,
@@ -90,7 +93,7 @@ export async function POST(req: Request) {
 
     try {
       const result = await model.generateContent({
-         contents: [{ role: 'user', parts: [{ text: prompt }] }]
+         contents: [{ role: 'user', parts: [{ text: userMessage }] }]
       }, { signal: controller.signal })
       
       clearTimeout(timeoutId)
