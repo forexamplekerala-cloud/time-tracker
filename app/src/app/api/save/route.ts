@@ -43,29 +43,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Failed to insert entries' }, { status: 500 })
     }
 
-    // 3. Insert AI Feedback for misread or edited entries
+    // 3 & 4. Parallelize feedback insert and all-entries select to reduce latency round-trips
     const feedbackEntries = entries.filter((e: any) => e.ai_misread || e.edited)
-    if (feedbackEntries.length > 0) {
-      const feedbackToInsert = feedbackEntries.map((e: any, index: number) => ({
-        entry_id: insertedEntries.find(dbE => dbE.activity === e.activity && dbE.category === e.category)?.id || insertedEntries[index].id,
-        accepted: false,
-        corrected_fields: { 
-          note: e.ai_misread ? "Marked as misread by user" : "Edited by user",
-          violations: e.violations || []
-        }
-      }))
-      const { error: feedbackError } = await supabase.from('ai_feedback').insert(feedbackToInsert)
-      if (feedbackError) {
-        console.error('Error inserting ai_feedback:', feedbackError)
-      }
-    }
+    const feedbackPromise = feedbackEntries.length > 0 
+      ? supabase.from('ai_feedback').insert(
+          feedbackEntries.map((e: any, index: number) => ({
+            entry_id: insertedEntries.find(dbE => dbE.activity === e.activity && dbE.category === e.category)?.id || insertedEntries[index].id,
+            accepted: false,
+            corrected_fields: { 
+              note: e.ai_misread ? "Marked as misread by user" : "Edited by user",
+              violations: e.violations || []
+            }
+          }))
+        )
+      : Promise.resolve({ error: null })
 
-    // 4. Recompute daily_summaries securely by querying all entries for the day
-    const { data: allEntriesForDay } = await supabase
+    const entriesPromise = supabase
       .from('time_entries')
       .select('category, duration_minutes')
       .eq('user_id', user.id)
       .eq('date', date)
+
+    const [feedbackResult, entriesResult] = await Promise.all([feedbackPromise, entriesPromise])
+
+    if (feedbackResult.error) {
+      console.error('Error inserting ai_feedback:', feedbackResult.error)
+    }
+
+    const { data: allEntriesForDay } = entriesResult
 
     let productive = 0, distraction = 0, fuel = 0
     if (allEntriesForDay) {

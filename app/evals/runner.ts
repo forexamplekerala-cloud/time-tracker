@@ -3,7 +3,7 @@ import path from 'path';
 import readline from 'readline';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { runValidators } from '../src/lib/parser/validators';
-import { buildParserPrompt } from '../src/lib/parser/prompt';
+import { buildParserSystemInstruction, buildParserUserMessage } from '../src/lib/parser/prompt';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
@@ -30,10 +30,12 @@ export async function runEvals() {
 
     console.log(`Testing [${testCase.id}]: "${testCase.input}"`);
 
-    const prompt = buildParserPrompt(istDateString, '', 'text') + `\n\nUser text:\n"${testCase.input}"\n`;
+    const systemInstruction = buildParserSystemInstruction(istDateString, '', 'text');
+    const userMessage = buildParserUserMessage(testCase.input);
 
     const model = genAI.getGenerativeModel({
       model: modelName,
+      systemInstruction,
       generationConfig: {
         responseMimeType: "application/json",
       }
@@ -41,7 +43,7 @@ export async function runEvals() {
 
     try {
       const start = Date.now();
-      const result = await model.generateContent(prompt);
+      const result = await model.generateContent({ contents: [{ role: 'user', parts: [{ text: userMessage }] }] });
       const latency = Date.now() - start;
 
       const responseText = result.response.text();

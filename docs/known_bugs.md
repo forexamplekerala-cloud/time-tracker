@@ -26,6 +26,8 @@
 
 **AI PROCESS**: Checked env var → noticed model string didn't match known Gemini model names → confirmed by reading Google AI SDK docs
 
+> **CORRECTION (2026-09-10)**: The "model doesn't exist" root cause was WRONG. Live API test with the user's key (`node test_gemini.js`) returned a valid parse from `gemini-3.5-flash` in seconds. `.env.local` sets `GEMINI_MODEL=gemini-3.5-flash` and it works. Parse latency = genuine Gemini generation time, not a model-name failure. Kept for history per the never-delete rule — do NOT "fix" the model name again.
+
 ---
 
 ## BUG-002 — Supabase `createClient()` called without `await` in server route
@@ -81,6 +83,17 @@ const parsedData = JSON.parse(cleaned)
 **FIX (pending)**: Add regex `/^\d{2}:\d{2}$/` check on `start_time` and `end_time` in validators  
 **FAILED ATTEMPTS**: None yet — not formally fixed  
 **AI PROCESS**: N/A — bug identified by inspection of validator code
+
+---
+
+## BUG-006 — Eval harness broke after parser prompt refactor (compile blocker)
+**STATUS**: FIXED
+**FILE**: `app/evals/runner.ts` line 6
+**SYMPTOM**: `npx tsc --noEmit` fails → `npm run build` fails → no change can be verified or shipped
+**ROOT CAUSE**: The parser refactor renamed `buildParserPrompt` → `buildParserSystemInstruction` + `buildParserUserMessage` in `app/src/lib/parser/prompt.ts` and updated `parse/route.ts`, but `evals/runner.ts` still imported the old name. `tsconfig.json` includes `**/*.ts`, so the standalone eval script was inside the compile scope.
+**FIX**: Updated the import and mirrored the production call shape (systemInstruction on the model + user-message contents), matching `parse/route.ts`. Verified: `npx tsc --noEmit` clean, `npm run build` green (2026-09-10).
+**FAILED ATTEMPTS**: None — caught by typecheck before anything shipped.
+**AI PROCESS**: tsc error named the exact file/line → checked prompt.ts exports → confirmed rename was the only breakage. Note: eval harness still lacks `responseSchema` (production uses it) — eval JSON shape may differ slightly from production; not fixed here.
 
 ---
 
