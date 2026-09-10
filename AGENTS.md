@@ -29,7 +29,7 @@ All run inside `app/`:
 - Phase 1 traps are forbidden: no native apps, no screen-time integration, no payments, no social/team features, no streaks/badges/gamification, no notifications, no landing page, no medical/ADHD claims.
 - Privacy: Supabase row-level security; each user sees only their own data. No public feed, no sharing.
 - 24-hour time internally; IST (Asia/Kolkata) for display.
-- Productive time = Trading/Deep Work + Agency/Business only. Fuel never inflates productive hours.
+- Productive time = Trading/Deep Work + Agency/Business, plus one exception (user-approved 2026-09-10): gym entries (Life/Fuel, activity matching /gym/i) rated 'Good' count as Productive. ALL other Fuel never inflates productive hours. Single source of truth: `countsAsProductive()` in `app/src/lib/entries/summary.ts`.
 - **HARD STOP**: Before writing any code to fix a bug, you MUST invoke the `fix_before_touch` skill. You cannot write code until its checklist is complete.
 - **HYPOTHESIS RULE**: Before any code edit, state: (a) what I believe the bug is, (b) which line/file proves it, (c) how I'll verify the fix.
 - **BUG LOGGING**: After fixing any bug, you MUST append an entry to `docs/known_bugs.md`.

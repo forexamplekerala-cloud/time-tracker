@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { getTruthLine } from '@/lib/dashboard/truth'
-import { resolveDurationMinutes } from '@/lib/entries/summary'
+import { resolveDurationMinutes, countsAsProductive } from '@/lib/entries/summary'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import TimelineList from './TimelineList'
@@ -49,7 +49,7 @@ export default async function TodayPage({
   let prod = 0, dist = 0, fuel = 0, unclear = 0
   for (const e of (entries || []) as any[]) {
     const mins = resolveDurationMinutes(e.duration_minutes, e.start_time, e.end_time) || 0
-    if (e.category === 'Trading/Deep Work' || e.category === 'Agency/Business') prod += mins
+    if (countsAsProductive(e.category, e.activity, e.impact_rating)) prod += mins
     else if (e.category === 'Distraction') dist += mins
     else if (e.category === 'Life/Fuel') fuel += mins
     else if (e.category === 'Unclear') unclear += mins
