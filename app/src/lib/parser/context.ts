@@ -7,6 +7,7 @@ export async function getUserLexicon(userId: string): Promise<string> {
   const { count, error } = await supabase
     .from('ai_feedback')
     .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
     
   if (error || count === null || count < 10) {
     return ''

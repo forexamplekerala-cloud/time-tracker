@@ -33,6 +33,7 @@ export default function ReviewClient() {
   const router = useRouter()
   const [entries, setEntries] = useState<ParsedEntry[]>([])
   const [unparsed, setUnparsed] = useState<string[]>([])
+  const [warnings, setWarnings] = useState<string[]>([])
   const [date, setDate] = useState<string>('')
   const [isSaving, setIsSaving] = useState(false)
 
@@ -44,6 +45,7 @@ export default function ReviewClient() {
         setDate(data.date)
         setEntries(data.entries.map((e: any, i: number) => ({ ...e, id: `temp-${i}` })))
         setUnparsed(data.unparsed_fragments || [])
+        setWarnings(data.warnings || [])
       } catch (e) {
         console.error("Failed to parse session data", e)
       }
@@ -104,6 +106,17 @@ export default function ReviewClient() {
 
   return (
     <div className="flex flex-col flex-1">
+      {warnings.length > 0 && (
+        <div className="mb-6 p-4 bg-[#FEF3C7] border border-[#F59E0B]/30 rounded-md">
+          <p className="text-sm font-medium text-[#B45309] mb-2 flex items-center gap-2">
+            <AlertCircle size={16} /> Parser notes
+          </p>
+          <ul className="text-sm text-[#B45309] list-disc pl-4 space-y-1">
+            {warnings.map((w, i) => <li key={i}>{w}</li>)}
+          </ul>
+        </div>
+      )}
+
       {unparsed.length > 0 && (
         <div className="mb-6 p-4 bg-[#F4F4F5] border border-border rounded-md">
           <p className="text-sm font-medium text-ink mb-2 flex items-center gap-2">

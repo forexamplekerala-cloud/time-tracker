@@ -1,9 +1,12 @@
 import { createClient } from '@/utils/supabase/server'
-import { getTruthLine } from '@/lib/dashboard/truth'
+import { getInsights, getVoidLine } from '@/lib/dashboard/truth'
+import { getMirrorState, getMirrorQuoteIndex } from '@/lib/dashboard/quotes'
 import { resolveDurationMinutes, countsAsProductive } from '@/lib/entries/summary'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import TimelineList from './TimelineList'
+import AuditReport from './AuditReport'
+import MirrorQuote from './MirrorQuote'
 
 export default async function TodayPage({
   searchParams
@@ -44,7 +47,7 @@ export default async function TodayPage({
     .from('time_entries')
     .select('*')
     .eq('date', targetDateStr)
-    .order('created_at', { ascending: true })
+    .order('start_time', { ascending: true, nullsFirst: false })
 
   let prod = 0, dist = 0, fuel = 0, unclear = 0
   for (const e of (entries || []) as any[]) {
@@ -57,8 +60,6 @@ export default async function TodayPage({
   // Unclear time IS logged — never counted as unlogged
   const totalLogged = prod + dist + fuel + unclear
 
-  const fmt = (mins: number) => `${Math.floor(mins/60)}h ${mins%60}m`
-
   const istHm = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Kolkata',
     hour: '2-digit',
@@ -70,64 +71,79 @@ export default async function TodayPage({
     ? Math.max(0, elapsedIstMinutes - totalLogged)
     : Math.max(0, 24 * 60 - totalLogged)
 
-  const truthLine = getTruthLine(dist, prod, fuel, isToday)
+  const voidVerdict = getVoidLine(unlogged, { productive: prod, distraction: dist, fuel, unclear }, isToday)
+  const insights = getInsights(entries || [])
 
-  const displayTitle = isToday ? "Today's Audit" : `${targetDateStr} Audit`
+  const writtenPct = Math.min(
+    100,
+    Math.round((totalLogged / (isToday ? Math.max(elapsedIstMinutes, 1) : 1440)) * 100)
+  )
+  const mirrorState = getMirrorState(prod, dist, totalLogged)
+  const quoteIndex = getMirrorQuoteIndex(targetDateStr, mirrorState)
+
+  const prettyDate = new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+  }).format(targetDateObj)
+  const displayTitle = isToday ? "Today's Audit" : `${prettyDate} Audit`
+
+  // Single time source for verdict, dial void, and receipts ledger — all three reconcile.
+  const nowMinutes = isToday ? elapsedIstMinutes : null
+  const boundaryMinutes = isToday ? elapsedIstMinutes : 24 * 60
+  const boundaryLabel = isToday ? 'now' : '24:00'
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-3rem)] py-6">
-      <header className="mb-8">
-        <div className="flex items-center gap-4 mb-2">
+      {/* First read: the title. Second sight: the dial. Nothing in between. */}
+      <header className="mb-6">
+        <div className="flex items-center justify-between">
           <Link href={`/today?date=${prevDateStr}`} className="p-2 -ml-2 rounded-full hover:bg-surface transition-colors" title="Previous Day">
-            <ChevronLeft className="w-5 h-5 text-ink-muted" />
+            <ChevronLeft className="w-4 h-4 text-ink-muted" />
           </Link>
-          <h1 className="text-2xl text-ink font-semibold flex-1 text-center">{displayTitle}</h1>
+          <h1 className="font-mono text-lg font-semibold uppercase tracking-[0.1em] text-ink">{displayTitle}</h1>
           {canGoForward ? (
             <Link href={`/today?date=${nextDateStr}`} className="p-2 -mr-2 rounded-full hover:bg-surface transition-colors" title="Next Day">
-              <ChevronRight className="w-5 h-5 text-ink-muted" />
+              <ChevronRight className="w-4 h-4 text-ink-muted" />
             </Link>
           ) : (
-            <div className="w-9 h-9 -mr-2"></div> // Spacer to keep title centered
+            <div className="w-8 h-8 -mr-2"></div> // Spacer to keep title centered
           )}
         </div>
-        <p className="text-lg font-medium text-[#DC2626] text-center">{truthLine}</p>
       </header>
 
-      <div className="grid grid-cols-2 gap-4 mb-8">
-        <div className="p-4 bg-surface border border-border rounded-md">
-          <p className="text-sm text-ink-muted mb-1">Productive</p>
-          <p className="text-2xl font-mono text-[#16A34A]">{fmt(prod)}</p>
-        </div>
-        <div className="p-4 bg-surface border border-border rounded-md">
-          <p className="text-sm text-ink-muted mb-1">Lost</p>
-          <p className="text-2xl font-mono text-[#DC2626]">{fmt(dist)}</p>
-        </div>
-        <div className="p-4 bg-surface border border-border rounded-md">
-          <p className="text-sm text-ink-muted mb-1">Fuel</p>
-          <p className="text-2xl font-mono text-[#F59E0B]">{fmt(fuel)}</p>
-        </div>
-        <div className="p-4 bg-surface border border-border rounded-md">
-          <p className="text-sm text-ink-muted mb-1">Unlogged</p>
-          <p className="text-2xl font-mono text-[#A1A1AA]">{fmt(unlogged)}</p>
-        </div>
+      <AuditReport
+        entries={entries || []}
+        productive={prod}
+        distraction={dist}
+        fuel={fuel}
+        unclear={unclear}
+        unlogged={unlogged}
+        writtenPct={writtenPct}
+        voidVerdict={voidVerdict}
+        insights={insights}
+        nowMinutes={nowMinutes}
+      />
+
+      <div className="mt-6">
+        <TimelineList
+          initialEntries={entries || []}
+          boundaryMinutes={boundaryMinutes}
+          boundaryLabel={boundaryLabel}
+        />
       </div>
 
-      {totalLogged > 0 && (
-        <div className="mb-8">
-          <div className="flex h-6 rounded-full overflow-hidden bg-[#F4F4F5]">
-            <div style={{ width: `${(prod/totalLogged)*100}%` }} className="bg-[#16A34A] h-full transition-all"></div>
-            <div style={{ width: `${(fuel/totalLogged)*100}%` }} className="bg-[#F59E0B] h-full transition-all"></div>
-            <div style={{ width: `${(dist/totalLogged)*100}%` }} className="bg-[#DC2626] h-full transition-all"></div>
-          </div>
-          <p className="text-xs text-ink-muted mt-2 text-right">
-            {Math.round((prod/totalLogged)*100)}% of logged time productive
-          </p>
-        </div>
+      {/* Close the loop: realization -> immediate logging action (today only — logging is today-only in Phase 1) */}
+      {isToday && (
+        <Link
+          href="/log"
+          className="mt-6 flex items-center justify-center w-full min-h-[48px] py-3 border border-ink rounded-md text-sm font-semibold text-ink hover:bg-ink hover:text-[var(--background)] transition-colors"
+        >
+          → Log the missing hours
+        </Link>
       )}
 
-      <div className="mb-12">
-        <TimelineList initialEntries={entries || []} />
-      </div>
+      {/* Afterthought footnote, right above the nav */}
+      <MirrorQuote initialIndex={quoteIndex} />
     </div>
   )
 }

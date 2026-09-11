@@ -29,7 +29,7 @@
 
 ## Screen spec (single column, `max-width: 480px`, phone-first, min padding 20px)
 
-1. **Header**: muted stone date line, IST — "Friday, 4 September". No logo, no nav, no avatar.
+1. **Header**: muted stone date line, IST — "Friday, 4 September". No logo, no nav, no avatar. Right-aligned on the same line: tiny "LAST LOGGED" stamp (10px `#A8A29E` label + 12px mono `#78716C` time, 12h format) = today's latest `end_time` (fallback `start_time` → `created_at`); completely absent when nothing is logged today. Never a countdown/since-elapsed. Optional 1px `#E7E5E4` rule beneath closes the masthead.
 2. **Prompt**: "What actually happened today?" — 18px, ink, sentence case. Only sentence on screen.
 3. **Hero textarea**: `min-height 160px`, `16px/1.6`, auto-grow, white surface, `#E7E5E4` border, blue focus ring. Placeholder: a realistic rough example, e.g. "9 to 10 — 15 mins wasted, 30 mins study. 11 to 1 charts and backtesting…". Autofocus desktop only (mobile keyboard pop is jarring).
 4. **Example chips** (tappable, INSERT text into textarea at cursor — never navigate away): "9–11 trading", "45 mins YouTube", "1:30 to 3 client work", "Last 1 hour mostly phone". Stone chips (`#F4F4F5` bg), ≥44px touch target, wrap to multiple rows as needed.

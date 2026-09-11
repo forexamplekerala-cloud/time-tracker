@@ -75,6 +75,12 @@ export function runValidators(
     if (entry.duration_minutes !== null && typeof entry.duration_minutes !== 'number') {
       hardFail = true;
     }
+    if (entry.start_time && !/^\d{1,2}:\d{2}$/.test(entry.start_time)) {
+      hardFail = true;
+    }
+    if (entry.end_time && !/^\d{1,2}:\d{2}$/.test(entry.end_time)) {
+      hardFail = true;
+    }
 
     if (hardFail) {
       unparsed.push(entry.raw_fragment || "unknown fragment");

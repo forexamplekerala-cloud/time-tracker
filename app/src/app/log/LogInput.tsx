@@ -1,13 +1,12 @@
 'use client'
 
-import { useState, useRef, FormEvent } from 'react'
+import { useState, useRef, useEffect, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 
 const CHIPS = [
-  "9–11 trading",
-  "45 mins YouTube",
-  "1:30 to 3 client work",
-  "Last 1 hour mostly phone"
+  "Traded 2h",
+  "1h gym",
+  "Wasted 45m on phone"
 ]
 
 export default function LogInput({ initialText = '' }: { initialText?: string }) {
@@ -16,6 +15,13 @@ export default function LogInput({ initialText = '' }: { initialText?: string })
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const router = useRouter()
+
+  // Autofocus on desktop only — on mobile the popping keyboard is jarring.
+  useEffect(() => {
+    if (window.matchMedia('(min-width: 768px)').matches) {
+      textareaRef.current?.focus()
+    }
+  }, [])
 
   const handleChipClick = (chipText: string) => {
     if (!textareaRef.current) return
@@ -67,13 +73,13 @@ export default function LogInput({ initialText = '' }: { initialText?: string })
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col flex-1 pb-4">
-      <div className="relative mb-6">
+      <div className="relative mb-6 flex-1 flex">
         <textarea
           ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="9 to 10 — 15 mins wasted, 30 mins study. 11 to 1 charts and backtesting…"
-          className="w-full min-h-[160px] p-4 bg-surface border border-border rounded-md text-ink text-base leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-blue-600 transition-shadow duration-150 ease-out"
+          placeholder="e.g., woke up late, traded for 2 hours, then got distracted on YouTube…"
+          className="w-full flex-1 min-h-[240px] p-4 bg-surface border border-border rounded-md text-ink text-base leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-blue-600 transition-shadow duration-150 ease-out"
           disabled={isParsing}
         />
         {error && (
@@ -83,7 +89,7 @@ export default function LogInput({ initialText = '' }: { initialText?: string })
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-auto">
+      <div className="flex flex-wrap gap-2">
         {CHIPS.map((chip, idx) => (
           <button
             key={idx}

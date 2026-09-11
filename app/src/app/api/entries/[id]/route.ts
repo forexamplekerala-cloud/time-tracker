@@ -74,3 +74,54 @@ export async function DELETE(
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { id } = params
+    if (!id) {
+      return NextResponse.json({ error: 'Missing entry ID' }, { status: 400 })
+    }
+
+    const updates = await req.json()
+
+    // Security: Prevent updating immutable fields
+    delete updates.id
+    delete updates.user_id
+    delete updates.created_at
+
+    const { data: entryData, error: entryError } = await supabase
+      .from('time_entries')
+      .update(updates)
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .select('date')
+      .single()
+
+    if (entryError || !entryData) {
+      console.error('Error updating entry:', entryError)
+      return NextResponse.json({ error: 'Entry not found, unauthorized, or update failed' }, { status: 404 })
+    }
+
+    // Recompute daily_summaries for the date of the updated entry
+    try {
+      await recomputeDailySummary(supabase, user.id, entryData.date)
+    } catch (e: any) {
+      console.error('Error updating daily_summary after edit:', e.message)
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error in PATCH entry:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}

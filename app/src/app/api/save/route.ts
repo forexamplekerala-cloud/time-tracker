@@ -47,6 +47,7 @@ export async function POST(req: Request) {
       ? supabase.from('ai_feedback').insert(
           feedbackEntries.map((e: any, index: number) => ({
             entry_id: insertedEntries.find(dbE => dbE.activity === e.activity && dbE.category === e.category)?.id || insertedEntries[index].id,
+            user_id: user.id,
             accepted: false,
             corrected_fields: {
               note: e.ai_misread ? "Marked as misread by user" : "Edited by user",
@@ -62,11 +63,14 @@ export async function POST(req: Request) {
       recomputeDailySummary(supabase, user.id, date)
     ])
 
+    const responsePayload: any = { success: true, summary }
+
     if (feedbackResult.error) {
       console.error('Error inserting ai_feedback:', feedbackResult.error)
+      responsePayload.warnings = ['Failed to log AI feedback metrics. Please ensure the user_id column exists.']
     }
 
-    return NextResponse.json({ success: true, summary })
+    return NextResponse.json(responsePayload)
   } catch (error) {
     console.error('Error saving data:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

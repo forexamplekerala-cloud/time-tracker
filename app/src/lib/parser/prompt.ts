@@ -25,6 +25,7 @@ Rules:
 - Incomplete range -> needs_review: true.
 - Overlapping blocks -> flag (needs_review: true).
 - Ambiguous activity -> 'Unclear', never guessed as 'Distraction'.
+- Explicit waste words ("waste", "wasted", "wasted time") are the user logging lost time on purpose -> category 'Distraction'. This is not a guess. Vague inactivity ("did nothing") still stays 'Unclear'.
 - "50 minute scroll" = 50-min Distraction entry but NO invented start_time unless context is reliable.
 ${voiceInstructions}
 ${lexiconInstructions}
@@ -38,6 +39,13 @@ Output should have 3 entries:
 1. 09:00, no end time, 15m, Distraction, "wasted time", raw_fragment: "15min wasted", needs_review: true
 2. no start time, 10:00, 30m, Trading/Deep Work, "study", raw_fragment: "30min study", needs_review: true
 3. 11:00 to 13:00, 120m, Trading/Deep Work, "charts/backtesting", raw_fragment: "11-1 charts/backtesting", needs_review: false
+
+Input (two lines, typed on separate lines):
+"1:30 pm to 2:30 pm waste
+2:30 pm to 3:30 pm gym"
+Output should have 2 entries — one per line, never merged or dropped:
+1. 13:30 to 14:30, 60m, Distraction, "waste", raw_fragment: "1:30 pm to 2:30 pm waste", needs_review: false
+2. 14:30 to 15:30, 60m, Life/Fuel, "gym", raw_fragment: "2:30 pm to 3:30 pm gym", needs_review: false
 
 Input: "yesterday 9-11 trading"
 Output: unparsed_fragments: ["yesterday 9-11 trading"], entries: []

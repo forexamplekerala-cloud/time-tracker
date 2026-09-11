@@ -1,12 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { runValidators } from '../src/lib/parser/validators';
 import { buildParserSystemInstruction, buildParserUserMessage } from '../src/lib/parser/prompt';
+import { callGeminiParser, loadEnvLocal } from '../src/lib/parser/gemini-rest';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
 async function parseLine(line: string) {
   if (!line.trim()) return null;
@@ -15,6 +14,7 @@ async function parseLine(line: string) {
 }
 
 export async function runEvals() {
+  loadEnvLocal(path.join(__dirname, '..'));
   const datasetPath = path.join(__dirname, 'golden', 'dataset.jsonl');
   const fileStream = fs.createReadStream(datasetPath);
   const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
@@ -22,7 +22,7 @@ export async function runEvals() {
   const results = [];
   const istDateString = "2026-09-07"; // Mock server date
 
-  console.log(`Starting eval run against ${modelName}...\n`);
+  console.log(`Starting eval run against ${modelName} (production REST transport, thinking off)...\n`);
 
   for await (const line of rl) {
     const testCase = await parseLine(line);
@@ -33,20 +33,11 @@ export async function runEvals() {
     const systemInstruction = buildParserSystemInstruction(istDateString, '', 'text');
     const userMessage = buildParserUserMessage(testCase.input);
 
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      systemInstruction,
-      generationConfig: {
-        responseMimeType: "application/json",
-      }
-    });
-
     try {
       const start = Date.now();
-      const result = await model.generateContent({ contents: [{ role: 'user', parts: [{ text: userMessage }] }] });
+      const responseText = await callGeminiParser({ systemInstruction, userMessage });
       const latency = Date.now() - start;
 
-      const responseText = result.response.text();
       const rawParsed = JSON.parse(responseText);
 
       // Run validators

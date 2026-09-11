@@ -12,6 +12,8 @@
   - Incomplete range -> `needs_review: true`
   - Overlapping blocks -> flag
   - Ambiguous -> `Unclear`
+  - Explicit waste words ("waste", "wasted", "wasted time") -> `Distraction` (explicit self-report of lost time — not a guess). Vague inactivity ("did nothing") stays `Unclear`.
+  - Multi-line input: one entry per line, never merged or dropped (a few-shot example anchors this; transport runs at `temperature: 0` for deterministic extraction).
   - "50 minute scroll" = 50-min Distraction entry but NO invented start time unless context is reliable.
   - Fragments referencing non-today dates ("yesterday evening") -> unparsed_fragments; Phase 1 logs are today-only (server IST date).
 

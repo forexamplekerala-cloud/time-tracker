@@ -9,9 +9,9 @@ description: Creates a structured handoff note at the end of a debugging session
 
 ## Instructions
 
-1. Create or overwrite a file at `scratch/last_session.md`.
+1. Check `scratch/last_session.md`. If the file exists and the oldest entry in it is from within the last 3 days, append to the file (use `---` to separate sessions). Otherwise, if the file is older than 3 days or doesn't exist, overwrite it.
 2. Write the handoff note using the exact format below.
-3. Tell the user to paste the contents of `scratch/last_session.md` at the start of the next conversation.
+3. Tell the user to paste the relevant contents of `scratch/last_session.md` at the start of the next conversation.
 
 ## Handoff Note Format
 
