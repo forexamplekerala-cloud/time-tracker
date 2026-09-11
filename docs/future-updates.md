@@ -1,15 +1,8 @@
 # Future Updates
 
-## 1. Env Hardening (Vercel & Node.js)
+## 1. Env Hardening (Vercel & Node.js) — DONE 2026-09-11
 
-### Problem
-Env vars are currently only set for the `Production` environment in Vercel. Preview branch deploys and local `npm run dev` will miss them (middleware crashes). Vercel also defaulted to Node.js 24 (bleeding edge) which might cause dependency issues later.
-
-### Steps
-1. `vercel env add` all 5 vars for the `preview` environment (CLI, same values as production)
-2. `vercel env add` all 5 vars for the `development` environment (CLI, same values as production)
-3. In Vercel Build Settings, change Node.js from `24.x` to `22.x` (stable LTS)
-4. Trigger one empty commit redeploy to confirm no regression
+Completed via Vercel CLI + REST API: all 6 vars (`GEMINI_API_KEYS` key pool, `GEMINI_API_KEY`, `GEMINI_MODEL`, both `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SERVICE_ROLE_KEY`) now exist in Production, Preview, AND Development (all as Hidden Secret type). Node.js pinned to 22.x both in the project setting and via `engines.node` in `app/package.json`. Verified: production deploy Ready and serving 200 after the change.
 
 ---
 
