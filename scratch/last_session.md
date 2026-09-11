@@ -56,3 +56,58 @@ N/A — Fixes verified through `tsc --noEmit` and build. We deferred building ou
 
 ### Next step
 Ask the user if they have run the `ai_feedback.user_id` SQL migration. Then, tackle the "Review Edit UI / Legend / Duration Parity" feature (Phase 4 of the standing plan), which can now leverage the newly built `PATCH /api/entries/[id]` endpoint. Then build the CSV Export route.
+
+---
+
+## PENDING WORK — Migration plan: `ai_feedback.user_id` (logged 2026-09-11, awaiting manual SQL run)
+
+### Why it matters (current impact while pending)
+- `app/src/app/api/save/route.ts:50` inserts `user_id` into `ai_feedback` — the column does not exist → every save with corrections ("AI misread" checkbox or category edit) fails the feedback insert. Deliberately soft-failed (warning only, entries still save), but ALL learning data is lost.
+- `app/src/lib/parser/context.ts:10` (`getUserLexicon`) filters `ai_feedback` by `user_id` — query errors → returns `''` → the parser NEVER receives the user lexicon. The whole ai_feedback learning loop is dead until this migration runs.
+
+### The migration (Supabase Dashboard → SQL Editor → run as one block)
+```sql
+-- 1. Add the column (idempotent — safe to re-run)
+ALTER TABLE ai_feedback ADD COLUMN IF NOT EXISTS user_id uuid;
+
+-- 2. Backfill from parent entries (feedback belongs to whoever logged the entry)
+UPDATE ai_feedback f
+SET user_id = e.user_id
+FROM time_entries e
+WHERE f.entry_id = e.id
+  AND f.user_id IS NULL;
+
+-- 3. Enforce ownership going forward (app always sends user_id)
+ALTER TABLE ai_feedback ALTER COLUMN user_id SET NOT NULL;
+
+-- 4. RLS: users see/insert only their own feedback rows (privacy hard rule)
+CREATE POLICY "ai_feedback select own" ON ai_feedback
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "ai_feedback insert own" ON ai_feedback
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+```
+Caveats:
+- If step 3 errors ("column contains null values") there are orphaned rows (entry_id not in time_entries). Inspect with `SELECT * FROM ai_feedback WHERE user_id IS NULL;` — delete orphans (`DELETE FROM ai_feedback WHERE user_id IS NULL;`) and re-run step 3.
+- BEFORE step 4, check what policies already exist: `SELECT policyname, cmd FROM pg_policies WHERE tablename = 'ai_feedback';` — if broad "authenticated" policies exist, replace them with the two above (or the user-scoping is pointless); if RLS is enabled with NO policies, inserts were already blocked and step 4 is what unblocks them.
+
+### Verification (in order)
+1. Schema: `SELECT column_name, is_nullable FROM information_schema.columns WHERE table_name='ai_feedback' AND column_name='user_id';` → `uuid`, `NO`
+2. Orphans: `SELECT count(*) FROM ai_feedback WHERE user_id IS NULL;` → `0`
+3. End-to-end: `/log` → "1h gym" → `/review` → tick "AI misread" (or change category) → Save → response must NOT contain "Failed to log AI feedback metrics" → Supabase Table Editor shows the new `ai_feedback` row with your `user_id` filled
+4. Lexicon gate activates at >= 10 feedback rows (long-term; not checkable today)
+
+### Rollback (only if something breaks)
+```sql
+ALTER TABLE ai_feedback DROP COLUMN IF EXISTS user_id;
+DROP POLICY IF EXISTS "ai_feedback select own" ON ai_feedback;
+DROP POLICY IF EXISTS "ai_feedback insert own" ON ai_feedback;
+```
+
+### Companion (same SQL editor trip — BUG-010, optional but recommended)
+```sql
+ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS raw_fragment text;
+```
+NOTE: the ALTER alone does nothing until `raw_fragment: e.raw_fragment || null` is added to the insert payload in `app/src/app/api/save/route.ts` (separate small code change, next session).
+
+### Explicitly out of scope for this migration
+No code changes needed — the app code already sends `user_id`. Do not touch `/api/save`, `context.ts`, or the parser while running this.

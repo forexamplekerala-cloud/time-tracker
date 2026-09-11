@@ -13,6 +13,7 @@
   - user_id, date, productive_minutes, distraction_minutes, fuel_minutes, unlogged_minutes, bad_impact_minutes
 - `ai_feedback`
   - entry_id, accepted, corrected_fields
+  - PENDING: `user_id` column does not exist yet — code already writes it (`save/route.ts`) and reads it (`parser/context.ts`); run the migration plan in `scratch/last_session.md` → "PENDING WORK". Soft-fails: learning loop dead until run.
 
 *Note: Notion is export/backup only — never the primary app database.*
 
