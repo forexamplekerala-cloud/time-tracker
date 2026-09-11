@@ -29,5 +29,30 @@ Four threads, all on the Time Audit PWA: (1) `/today` gut-punch redesign (two ro
 ### Next step
 1. After quota reset (~12:30 IST): re-run the stability probe (2x two-line input, 2x four-line input) at default temperature. If line drops persist, implement ONE deterministic retry inside `/api/parse` when V8 coverage warnings fire — NOT more prompt text, NOT temperature (both proven failures).
 2. Vercel env: set `GEMINI_API_KEYS` (both keys) in Production — and Preview/Development per `docs/future-updates.md` item 1. Deploys currently fall back to single `GEMINI_API_KEY`.
-3. Ask the user to run the BUG-010 ALTER in Supabase SQL editor, then add `raw_fragment: e.raw_fragment || null` to the save insert in `app/src/app/api/save/route.ts`.
 4. Consider BUG-005 (regex `/^\d{2}:\d{2}$/` on start/end in validators) — separate small fix.
+
+---
+
+## Last Session — 2026-09-11 (Part 2)
+### What we were fixing
+Addressed critical Phase-1 gaps required for a multi-tester rollout: PWA installability, cross-user data leaks, timeline sorting, missing settings UI, and lossy editing (no PATCH endpoint). Also addressed BUG-005 (validator accepting invalid times) and BUG-003 (restored JSON fence stripping).
+
+### What we tried (with line references)
+- Fixed PWA: Created 192x192/512x512 icons, `sw.js`, and registered in `app/src/app/layout.tsx`.
+- Data Leak: Added `.eq('user_id', userId)` to the `ai_feedback` lexicon count query in `app/src/lib/parser/context.ts`. Also included `user_id` in `app/src/app/api/save/route.ts` insert payload.
+- Timeline Sort: Changed `app/src/app/today/page.tsx` to sort by `start_time` rather than `created_at`.
+- Settings Link: Added link to `app/src/components/BottomNav.tsx`.
+- Editing: Implemented `PATCH` in `app/src/app/api/entries/[id]/route.ts`.
+- BUG-005: Added `/^\d{1,2}:\d{2}$/` regex checks in `app/src/lib/parser/validators.ts`.
+- BUG-003: Restored `replace(/^```json\s*/i, '')` in `app/src/app/api/parse/route.ts`.
+
+### What failed and why
+N/A — Fixes verified through `tsc --noEmit` and build. We deferred building out the full CSV Export and the complex Review Edit UI to the next session to prevent ballooning the current one.
+
+### Current state of the code
+- Phase-1 backend gaps (PATCH endpoint, validators, sorting) are closed. PWA install is configured.
+- `ai_feedback` now expects a `user_id`. (Awaiting manual Supabase SQL migration by user).
+- Next big items remaining from the gap report: Review Edit UI, CSV Export.
+
+### Next step
+Ask the user if they have run the `ai_feedback.user_id` SQL migration. Then, tackle the "Review Edit UI / Legend / Duration Parity" feature (Phase 4 of the standing plan), which can now leverage the newly built `PATCH /api/entries/[id]` endpoint. Then build the CSV Export route.
