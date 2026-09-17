@@ -13,8 +13,8 @@ export async function POST(req: Request) {
 
     const { date, entries } = await req.json()
 
-    if (!date || !entries || !Array.isArray(entries)) {
-      return NextResponse.json({ error: 'Invalid data' }, { status: 400 })
+    if (!date || !entries || !Array.isArray(entries) || entries.length === 0) {
+      return NextResponse.json({ error: 'No entries to save' }, { status: 400 })
     }
 
     const entriesToInsert = entries.map((e: any) => ({
@@ -25,6 +25,7 @@ export async function POST(req: Request) {
       duration_minutes: typeof e.duration_minutes === 'number' ? e.duration_minutes : null,
       category: e.category,
       activity: e.activity,
+      raw_fragment: e.raw_fragment || null,
       source: 'ai',
       confidence: e.confidence,
       needs_review: typeof e.needs_review === 'boolean' ? e.needs_review : null,
@@ -42,20 +43,29 @@ export async function POST(req: Request) {
     }
 
     // Feedback rows for entries the user corrected or flagged; summary recompute runs in parallel.
-    const feedbackEntries = entries.filter((e: any) => e.ai_misread || e.edited)
-    const feedbackPromise = feedbackEntries.length > 0
-      ? supabase.from('ai_feedback').insert(
-          feedbackEntries.map((e: any, index: number) => ({
-            entry_id: insertedEntries.find(dbE => dbE.activity === e.activity && dbE.category === e.category)?.id || insertedEntries[index].id,
-            user_id: user.id,
-            accepted: false,
-            corrected_fields: {
-              note: e.ai_misread ? "Marked as misread by user" : "Edited by user",
-              violations: e.violations || [],
-              impact_rating: e.impact_rating ?? null
-            }
-          }))
-        )
+    const feedbackRows: any[] = []
+    if (insertedEntries && insertedEntries.length > 0) {
+      entries.forEach((e: any, i: number) => {
+        if (e.ai_misread || e.edited) {
+          const inserted = insertedEntries[i]
+          if (inserted?.id) {
+            feedbackRows.push({
+              entry_id: inserted.id,
+              user_id: user.id,
+              accepted: false,
+              corrected_fields: {
+                note: e.ai_misread ? "Marked as misread by user" : "Edited by user",
+                violations: e.violations || [],
+                impact_rating: e.impact_rating ?? null
+              }
+            })
+          }
+        }
+      })
+    }
+
+    const feedbackPromise = feedbackRows.length > 0
+      ? supabase.from('ai_feedback').insert(feedbackRows)
       : Promise.resolve({ error: null })
 
     const [feedbackResult, summary] = await Promise.all([

@@ -236,7 +236,7 @@ export default function ReviewClient() {
 
       <button
         onClick={handleSave}
-        disabled={isSaving}
+        disabled={isSaving || entries.length === 0}
         className="w-full mt-auto bg-ink text-background rounded-md py-4 text-lg font-medium disabled:opacity-50 transition-opacity"
       >
         {isSaving ? 'Saving…' : 'Save to timeline'}

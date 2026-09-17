@@ -72,7 +72,7 @@ These are traps for Phase 1:
 - Stripe/payments.
 - Social features.
 - Team workspaces.
-- Complex goals, streaks, badges, gamification.
+- Complex goals, streaks (including "streams" or "rolling counts" as UI elements), badges, gamification.
 - Notifications.
 - Too many charts.
 - Medical claims or “ADHD treatment” positioning.

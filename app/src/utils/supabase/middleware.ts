@@ -32,8 +32,9 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Protected routes
-  const isPublicRoute = request.nextUrl.pathname.startsWith('/login')
+  // Public routes & PWA assets that must not require auth
+  const publicPaths = ['/login', '/manifest.json', '/sw.js', '/icon-192.png', '/icon-512.png']
+  const isPublicRoute = publicPaths.some(p => request.nextUrl.pathname.startsWith(p))
   
   if (!user && !isPublicRoute) {
     // Redirect unauthenticated users to login page
@@ -42,7 +43,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
   
-  if (user && isPublicRoute) {
+  if (user && request.nextUrl.pathname.startsWith('/login')) {
     // Redirect authenticated users away from login
     const url = request.nextUrl.clone()
     url.pathname = '/log'

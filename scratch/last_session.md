@@ -111,3 +111,42 @@ NOTE: the ALTER alone does nothing until `raw_fragment: e.raw_fragment || null` 
 
 ### Explicitly out of scope for this migration
 No code changes needed — the app code already sends `user_id`. Do not touch `/api/save`, `context.ts`, or the parser while running this.
+
+---
+
+## Last Session — 2026-09-17
+### What we were fixing
+Configured UniKey API models in Kilo Code global config (`C:\Users\fawaz\.config\kilo\kilo.json` & `kilo.jsonc`), resolved New API pre-deduction quota failures (`预扣费额度失败`), deleted non-working model mappings (`kimi-k3` distributor unrouted), and verified all active UniKey models against the fresh API key.
+
+### What we tried (with line references)
+- Global Kilo Config: Updated `C:\Users\fawaz\.config\kilo\kilo.json` and `kilo.jsonc` with `provider.unikey` using fresh API key `sk-DgawMHPsqDe1yNX9qZIgPHSIQ4sNJuOCoo7AoWUaRLz9qcGO`.
+- Safe Output Caps: Set `limit.output` to 4096 tokens (instead of 16k) across models so New API pre-deductions do not exceed user's account credit limits.
+- Model IDs Mapped:
+  - `kimi-k3` & `moonshotai/kimi-k3` -> `moonshotai/kimi-k3` (200 OK with reasoning)
+  - `deepseek-v4-pro` -> `deepseek-v4-pro` (200 OK with reasoning)
+  - `deepseek-v4-flash` -> `deepseek-v4-flash` (200 OK)
+  - `glm-5.2` -> `z-ai/glm-5.2` (200 OK with reasoning)
+  - `glm-5.1` -> `z-ai/glm-5.1` (200 OK with reasoning)
+- Background Process Cache: Terminated stale `kilo.exe serve` processes holding old models in memory.
+- Documented in `.agents/skills/unikey/SKILL.md`.
+
+### What failed and why
+- Old `sk-Ofer9ZO3...` API key was down to 54 credits. When Kilo Code sent prompt tokens + 16k max output tokens, New API pre-deducted `(prompt + output) * ratio * completion_ratio` which demanded 782~1092 credits, causing `预扣费额度失败` 403 errors. Resolved by switching to user's fresh key `sk-DgawMHPsqDe1yNX9qZIgPHSIQ4sNJuOCoo7AoWUaRLz9qcGO` and capping `limit.output` to 4096.
+- Model ID `kimi-k3` fails with 503 `No available channel for model kimi-k3 under group kimi (distributor)`. Upstream requires `moonshotai/kimi-k3`.
+- Model ID `glm-5.2` without `z-ai/` prefix fails with 400 unpriced. Upstream requires `z-ai/glm-5.2`.
+
+### Current state of the code
+- All UniKey models live-tested and 100% verified working with HTTP 200:
+  - Kimi K3 (`moonshotai/kimi-k3`): 200 OK (Reasoning active)
+  - DeepSeek V4 Pro (`deepseek-v4-pro`): 200 OK (Reasoning active)
+  - DeepSeek V4 Flash (`deepseek-v4-flash`): 200 OK
+  - GLM 5.2 (`z-ai/glm-5.2`): 200 OK (Reasoning active)
+  - GLM 5.1 (`z-ai/glm-5.1`): 200 OK (Reasoning active)
+  - Kimi K2.7 Code (`moonshotai/kimi-k2.7-code`): 200 OK
+  - Claude Opus 4.6 / 4.8 & Claude Haiku 4.5: 200 OK
+  - Qwen 3.7 Max & Gemini 3.5 Flash: 200 OK
+- Active default model in `kilo.json` is `unikey/kimi-k3`.
+
+### Next step
+- If Kilo Code UI hasn't reloaded yet, run `Developer: Reload Window` (`Ctrl+Shift+P`) in Antigravity IDE.
+- For trading dashboard / Time Tracker app work, proceed with testing or pending Supabase `ai_feedback.user_id` migration when ready.

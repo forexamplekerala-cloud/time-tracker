@@ -14,6 +14,7 @@ export default async function TodayPage({
   searchParams: { date?: string }
 }) {
   const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
   
   // Real implementation: get IST date correctly
   const now = new Date()
@@ -24,30 +25,41 @@ export default async function TodayPage({
     day: '2-digit',
   }).format(now).split('/').reverse().join('-')
 
-  // Use searchParams.date if valid, otherwise fallback to IST today
-  const targetDateStr = searchParams.date || istDateStr
+  // Validate searchParams.date (must be YYYY-MM-DD and not in the future)
+  let targetDateStr = istDateStr
+  if (searchParams.date && /^\d{4}-\d{2}-\d{2}$/.test(searchParams.date)) {
+    const testDate = new Date(searchParams.date + 'T12:00:00Z')
+    if (!isNaN(testDate.getTime())) {
+      // Future dates are unwritten, not a 24h void — clamp to today
+      targetDateStr = searchParams.date <= istDateStr ? searchParams.date : istDateStr
+    }
+  }
   const isToday = targetDateStr === istDateStr
 
-  // Calculate previous and next dates for arrows
-  const targetDateObj = new Date(targetDateStr)
-  targetDateObj.setHours(12, 0, 0, 0) // Avoid timezone shifts when adding/subtracting days
+  // Calculate previous and next dates for arrows safely
+  const targetDateObj = new Date(targetDateStr + 'T12:00:00Z')
   
   const prevDateObj = new Date(targetDateObj)
-  prevDateObj.setDate(prevDateObj.getDate() - 1)
+  prevDateObj.setUTCDate(prevDateObj.getUTCDate() - 1)
   const prevDateStr = prevDateObj.toISOString().split('T')[0]
 
   const nextDateObj = new Date(targetDateObj)
-  nextDateObj.setDate(nextDateObj.getDate() + 1)
+  nextDateObj.setUTCDate(nextDateObj.getUTCDate() + 1)
   const nextDateStr = nextDateObj.toISOString().split('T')[0]
   
-  const canGoForward = !isToday
+  const canGoForward = !isToday && nextDateStr <= istDateStr
 
-  // Compute totals live from entries (source of truth) — daily_summaries is only a cache
-  const { data: entries } = await supabase
+  // Compute totals live from entries (source of truth) — scoped to user
+  let query = supabase
     .from('time_entries')
     .select('*')
     .eq('date', targetDateStr)
-    .order('start_time', { ascending: true, nullsFirst: false })
+
+  if (user) {
+    query = query.eq('user_id', user.id)
+  }
+
+  const { data: entries } = await query.order('start_time', { ascending: true, nullsFirst: false })
 
   let prod = 0, dist = 0, fuel = 0, unclear = 0
   for (const e of (entries || []) as any[]) {

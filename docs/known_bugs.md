@@ -76,13 +76,13 @@ const parsedData = JSON.parse(cleaned)
 ---
 
 ## BUG-005 — Validator silently passes invalid time strings
-**STATUS**: OPEN  
-**FILE**: `app/src/lib/parser/validators.ts`  
-**SYMPTOM**: `start_time` of `"9:0"` or `"9 am"` passes validation even though 24-hour HH:MM is required  
-**ROOT CAUSE**: Validators check presence but not format. No regex enforcing `HH:MM` pattern.  
-**FIX (pending)**: Add regex `/^\d{2}:\d{2}$/` check on `start_time` and `end_time` in validators  
-**FAILED ATTEMPTS**: None yet — not formally fixed  
-**AI PROCESS**: N/A — bug identified by inspection of validator code
+**STATUS**: FIXED  
+**FILE**: `app/src/lib/parser/validators.ts` lines 78-85  
+**SYMPTOM**: `start_time` or `end_time` with invalid 24-hour ranges (e.g. `25:00`, `99:99`) passed validation and corrupted downstream calculations.  
+**ROOT CAUSE**: Validator regex was loosely `/^\d{1,2}:\d{2}$/`, checking digit counts but allowing hour numbers >= 24 and minute numbers >= 60.  
+**FIX**: Enforced strict 24-hour time regex `/^([01]?\d|2[0-3]):[0-5]\d$/` for `start_time` and `end_time`. Verified: `npx tsc --noEmit` clean, `npm run build` green.  
+**FAILED ATTEMPTS**: None.  
+**AI PROCESS**: Code inspection during deep audit → tightened regex to standard 24h clock constraints.
 
 ---
 
@@ -131,15 +131,13 @@ const parsedData = JSON.parse(cleaned)
 ---
 
 ## BUG-010 — `raw_fragment` not persisted in `time_entries`
-**STATUS**: OPEN (needs one-line ALTER by user — no direct Postgres access from app env)
-**FILE**: `app/src/app/api/save/route.ts` (insert payload), `app/src/app/today/TimelineList.tsx`
-**SYMPTOM**: Timeline cards show empty `""` quote line; Edit-reparse navigates to /log with no prefilled text.
-**ROOT CAUSE**: Live schema introspection confirmed `time_entries` has no `raw_fragment` column (docs listed it aspirationally). The parser produces it; the save route can't store what the table lacks.
-**FIX (pending)**: Run in Supabase SQL editor:
-`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS raw_fragment text;`
-Then add `raw_fragment: e.raw_fragment || null` to the save insert. UI already softened: empty quote line hidden; Edit skips the reparse param when empty.
-**FAILED ATTEMPTS**: None — deliberately NOT adding the column to the insert before the ALTER exists, because PostgREST would 400 every save.
-**AI PROCESS**: Sampled one row per table via service key → column list lacked raw_fragment → chose display-side mitigation + user-run migration over breaking saves.
+**STATUS**: FIXED  
+**FILE**: `app/src/app/api/save/route.ts` line 28, `app/src/app/today/TimelineList.tsx` line 330  
+**SYMPTOM**: Timeline cards could not display the user's original raw text quotes because `raw_fragment` was never stored in the database.  
+**ROOT CAUSE**: The `time_entries` Postgres table was missing the `raw_fragment text` column.  
+**FIX**: Executed live database DDL migration `ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS raw_fragment text;` via PostgreSQL connection pooler (`aws-0-ap-southeast-1.pooler.supabase.com:6543`) and added `raw_fragment: e.raw_fragment || null` to the save insert payload. Timeline cards now display raw text quote snippets and reparse correctly. Verified: live DB schema introspection confirmed `raw_fragment text` exists; `npx tsc --noEmit` clean; `npm run build` green.  
+**FAILED ATTEMPTS**: None.  
+**AI PROCESS**: Connected directly to Supabase Postgres instance → executed migration in transaction → wired save insert payload.
 
 ---
 
@@ -309,6 +307,94 @@ Then add `raw_fragment: e.raw_fragment || null` to the save insert. UI already s
 **FIX**: Appended `.eq('user_id', userId)` to the count query.
 **FAILED ATTEMPTS**: None.
 **AI PROCESS**: Code inspection based on gap analysis.
+
+---
+
+## BUG-024 — Foreign hourlyRate in Profile broke compile and violated core time philosophy
+**STATUS**: FIXED
+**FILE**: `app/src/app/design-preview/page.tsx` line 182
+**SYMPTOM**: `npx tsc --noEmit` and `npm run build` failed with `TS2741: Property 'hourlyRate' is missing in type '{ birthYear: number; priorityLabel: string; }' but required in type 'Profile'`.
+**ROOT CAUSE**: An experimental mockup in `design-preview/page.tsx` defined `hourlyRate: number` in `interface Profile` with a comment referencing money equivalences. It was omitted in `PROFILE` on line 238, failing strict TypeScript compilation. Furthermore, money/hourly wage concepts violate the project's core philosophy (a pure time-awareness mirror, not a wage calculator).
+**FIX**: Purged `hourlyRate` from `interface Profile`. Verified: `npx tsc --noEmit` exits clean (0 errors), `npm run build` completes with 13/13 pages generated successfully.
+**FAILED ATTEMPTS**: None.
+**AI PROCESS**: Compiler error pointed directly to the line → checked interface definition vs object literal → recognized both the type mismatch and the direct violation of `docs/product-plan.md` scope guardrails → removed the foreign field completely.
+
+---
+
+## BUG-025 — Middleware auth check intercepted PWA manifest and service worker
+**STATUS**: FIXED
+**FILE**: `app/src/middleware.ts` line 17, `app/src/utils/supabase/middleware.ts` lines 36-50
+**SYMPTOM**: Unauthenticated visitors or mobile browser PWA engine received a 307 redirect to `/login` when fetching `/manifest.json` or `/sw.js`, breaking install prompts and offline registration.
+**ROOT CAUSE**: The middleware matcher only excluded image files, favicon, and `_next/` assets. `updateSession` checked only `request.nextUrl.pathname.startsWith('/login')`, treating `/manifest.json` and `/sw.js` as protected routes that redirect to `/login` when no user session exists.
+**FIX**: (1) Added `manifest\.json` and `sw\.js` to `middleware.ts` matcher exclusions. (2) Defined `publicPaths = ['/login', '/manifest.json', '/sw.js', '/icon-192.png', '/icon-512.png']` in `utils/supabase/middleware.ts` and narrowed login redirect to `/login` paths only. Verified: clean `npx tsc --noEmit`, `npm run build` green (13/13 pages).
+**FAILED ATTEMPTS**: None.
+**AI PROCESS**: Traced request path for PWA assets against the middleware regex and `isPublicRoute` definition → identified false 307 on `/manifest.json` → added exact asset exemptions.
+
+---
+
+## BUG-026 — PATCH /api/entries/[id] lacked payload validation and field whitelist
+**STATUS**: FIXED
+**FILE**: `app/src/app/api/entries/[id]/route.ts` lines 95-150
+**SYMPTOM**: Arbitrary fields could be updated on `time_entries` records via PATCH. Passing non-object JSON caused an unhandled 500 TypeError (`delete updates.id`), and invalid categories or missing durations went unvalidated.
+**ROOT CAUSE**: The route parsed `await req.json()`, only deleted `id`, `user_id`, and `created_at`, and passed the remaining raw body directly to Supabase `.update()`.
+**FIX**: Enforced JSON object validation and strict field whitelisting (`activity`, `category` restricted to 5 allowed categories, `start_time` and `end_time` format validation, `impact_rating` check, and automatic recalculation of `duration_minutes` when start/end times change). Verified: clean `npx tsc --noEmit`, `npm run build` green (13/13 pages).
+**FAILED ATTEMPTS**: None.
+**AI PROCESS**: Code inspection during deep audit → identified unrestricted mass-assignment vulnerability → wrote explicit whitelist with duration recalculation.
+
+---
+
+## BUG-027 — Edit flow prematurely deleted entries from DB, causing data loss
+**STATUS**: FIXED
+**FILE**: `app/src/app/today/TimelineList.tsx` lines 150-250
+**SYMPTOM**: Clicking "Edit" on a timeline card immediately deleted the entry from Supabase. Because `raw_fragment` does not yet exist in the DB (BUG-010), the reparse parameter was empty, redirecting the user to `/log` with an empty textarea and permanently destroying their logged entry.
+**ROOT CAUSE**: `handleEdit` executed `DELETE /api/entries/${entry.id}` before the user ever saw an edit interface or saved a replacement.
+**FIX**: Replaced the destructive delete-and-redirect with non-destructive in-place card editing (activity text input, category select, and start/end time inputs) that submits to the hardened `PATCH /api/entries/${entry.id}`. Added safe "Open in /log" secondary option that does NOT delete the entry. Verified: `npx tsc --noEmit` clean, `npm run build` green (13/13 pages).
+**FAILED ATTEMPTS**: None.
+**AI PROCESS**: Deep audit mapped blast radius → identified data-destruction flaw → decoupled editing from record deletion and implemented inline PATCH form.
+
+---
+
+## BUG-028 — Missing user_id query filters, invalid date crashes, and week heatmap truth distortions
+**STATUS**: FIXED
+**FILE**: `app/src/app/today/page.tsx` lines 14-54, `app/src/app/week/page.tsx` lines 5-75, `app/src/app/log/page.tsx` lines 9-37
+**SYMPTOM**: (1) Visiting `/today?date=xyz` crashed with unhandled 500 error (`RangeError: Invalid time value`). (2) Future dates could be navigated into, falsely reporting a 24h blank void before the day started. (3) Heatmap day names shifted back by one day in UTC server runtimes. (4) An empty week displayed false praise ("A solid week, but distraction creeping up."). (5) Database queries on `/today`, `/week`, and `/log` omitted `.eq('user_id', user.id)`.
+**ROOT CAUSE**: `prevDateObj.toISOString()` had no validation on input date; forward navigation was unconstrained; `new Date(s.date).getDay()` ran against UTC midnight; week headline condition `totalDist > totalProd` fell through to "A solid week" on 0m; and queries relied solely on RLS without application-level defense-in-depth scoping.
+**FIX**: (1) Validated date regex `/^\d{4}-\d{2}-\d{2}$/` and clamped future dates to today. (2) Restricted forward navigation to dates `<= istDateStr`. (3) Parsed heatmap day names in midday IST (`${s.date}T12:00:00+05:30`). (4) Added explicit empty-week state ("No time logged this week — the record is blank.") to protect truth integrity. (5) Scoped queries across `/today`, `/week`, and `/log` with `.eq('user_id', user.id)`. Verified: `npx tsc --noEmit` clean, `npm run build` green (13/13 pages).
+**FAILED ATTEMPTS**: None.
+**AI PROCESS**: Full-site deep audit mapped gaps against `docs/product-plan.md` requirements → fixed privacy defense-in-depth and truth integrity across all dashboard views.
+
+---
+
+## BUG-029 — AI feedback corrections attached to wrong entry ID and empty entries array insert
+**STATUS**: FIXED
+**FILE**: `app/src/app/api/save/route.ts` lines 16 & 45-64, `app/src/app/review/ReviewClient.tsx` line 239
+**SYMPTOM**: When saving review corrections where multiple entries shared an activity/category or where non-initial entries were modified, `ai_feedback` rows were inserted with incorrect `entry_id` references pointing to unrelated entries. Furthermore, saving an empty entries array attempted an empty insert to Supabase instead of rejecting cleanly.
+**ROOT CAUSE**: `feedbackEntries` was created via `entries.filter(...)`. Inside `feedbackEntries.map((e, index) => ...)`, the code attempted to find the entry by `dbE.activity === e.activity && dbE.category === e.category` and fell back to `insertedEntries[index].id`. Because `index` was the index of the filtered array (not the full entries array) and `find` collided on repeated activity names, feedback rows attached to the wrong `time_entries` record.
+**FIX**: (1) Iterated the original `entries` list by index `i`, mapping directly to `insertedEntries[i].id` when `ai_misread` or `edited` is flagged. (2) Added `entries.length === 0` validation to return a 400 'No entries to save' in `/api/save`, and disabled the save button in `ReviewClient.tsx` when no entries remain. Verified: `npx tsc --noEmit` clean, `npm run build` green (13/13 pages).
+**FAILED ATTEMPTS**: None.
+**AI PROCESS**: Traced database insert pipeline from client review state to Postgres tables → discovered index mismatch between filtered array and insertion results → converted to direct 1-to-1 index alignment.
+
+---
+
+## BUG-030 — False V4_INVENTED_TIME on midnight entries and untimed entry overlap distortion
+**STATUS**: FIXED
+**FILE**: `app/src/lib/parser/validators.ts` lines 145-152 & 163-186
+**SYMPTOM**: (1) Legitimate midnight entries (e.g. "12 am to 1 am studied") were flagged with `V4_INVENTED_TIME`, adding false warning badges. (2) Untimed entries (e.g. "read 30 mins") with `start_time: null` were treated as 00:00, being shoved to midnight in chronological sort and triggering spurious `V5_OVERLAP` warnings against real morning entries.
+**ROOT CAUSE**: (1) `h12` calculation evaluated `0 > 12 ? 0 - 12 : 0` which yielded `0` instead of `12` for hour `0`. Because user input wrote "12", checking for string `'0'` failed. Also failed to recognize keyword "midnight". (2) `(timeToMinutes(a.start_time) || 0)` coerced `null` to `0`, inappropriately conflating untimed entries with 00:00 midnight entries.
+**FIX**: (1) Corrected 12-hour translation for hour 0: `const h12 = h === 0 ? 12 : (h > 12 ? h - 12 : h)` and added check for keyword `'midnight'`. (2) Filtered entries for V5 overlap to include only entries with both `start_time !== null && end_time !== null`, and sorted `finalEntries` by placing untimed entries cleanly at the end without polluting timed sorting. Verified: `npx tsc --noEmit` clean, `npm run build` green (13/13 pages).
+**FAILED ATTEMPTS**: None.
+**AI PROCESS**: Analyzed validator edge cases → traced false positives on 12-hour midnight conversion and untimed null-start handling → fixed conversion logic and partitioned overlap scope.
+
+---
+
+## BUG-031 — Horizontal flex layout squashed error messages and generic error swallowed API 429 messages
+**STATUS**: FIXED
+**FILE**: `app/src/app/log/LogInput.tsx` lines 58-72 & 77
+**SYMPTOM**: When a parsing error occurred (such as Gemini 429 quota exhaustion), the error text was placed in a horizontal flex layout with the `<textarea>`, which squeezed or pushed the error message off-screen. Furthermore, the catch block swallowed all server response error messages into a generic `"We had trouble parsing that. Please try again."`, preventing users from knowing their daily Gemini quota had run out.
+**ROOT CAUSE**: The outer textarea wrapper used `<div className="relative mb-6 flex-1 flex">` with default flex-row layout. `handleSubmit` only checked `if (!response.ok) throw new Error('Failed to parse text')` without reading the error payload from the JSON response.
+**FIX**: (1) Changed container layout to `flex flex-col` so error messages render vertically inline directly below the textarea. (2) Extracted `response.json().error` message from non-200 responses to display the actual server status (e.g., quota notices) in calm inline stone text per `docs/design-input-screen.md`. Verified: `npx tsc --noEmit` clean, `npm run build` green (13/13 pages).
+**FAILED ATTEMPTS**: None.
+**AI PROCESS**: Examined input screen layout and submit handler → identified flex-row collision between textarea and error paragraph → structured column flow and propagated server API errors.
 
 ---
 

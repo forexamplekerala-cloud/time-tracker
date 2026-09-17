@@ -56,7 +56,12 @@ export default function LogInput({ initialText = '' }: { initialText?: string })
       })
 
       if (!response.ok) {
-        throw new Error('Failed to parse text')
+        let errorMsg = 'Failed to parse text'
+        try {
+          const errData = await response.json()
+          if (errData?.error) errorMsg = errData.error
+        } catch (_) {}
+        throw new Error(errorMsg)
       }
 
       const data = await response.json()
@@ -65,15 +70,15 @@ export default function LogInput({ initialText = '' }: { initialText?: string })
       // In a real app, this might be saved to a database and fetched on the review page
       sessionStorage.setItem('pendingParseResult', JSON.stringify(data))
       router.push('/review')
-    } catch (err) {
-      setError("We had trouble parsing that. Please try again.")
+    } catch (err: any) {
+      setError(err?.message || "We had trouble parsing that. Please try again.")
       setIsParsing(false)
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col flex-1 pb-4">
-      <div className="relative mb-6 flex-1 flex">
+      <div className="relative mb-6 flex-1 flex flex-col">
         <textarea
           ref={textareaRef}
           value={text}
@@ -83,7 +88,7 @@ export default function LogInput({ initialText = '' }: { initialText?: string })
           disabled={isParsing}
         />
         {error && (
-          <p className="mt-2 text-sm text-ink-muted">
+          <p className="mt-2 text-sm text-ink-muted leading-snug">
             {error}
           </p>
         )}

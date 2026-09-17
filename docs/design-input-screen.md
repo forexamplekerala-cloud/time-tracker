@@ -37,7 +37,7 @@
 6. **Navigation / Post-tap**: On tap -> Parsing state; after parse -> navigate to `/review`; after save -> route to dashboard.
 ## ADHD-friendly hard rules (this page)
 - One job per screen; input box is the only hero element.
-- No timers, counters, streaks, badges, progress rings, red dots — nothing that accumulates or nags.
+- No timers, counters, streaks (or "streams" / "rolling counts"), badges, progress rings, red dots — nothing that accumulates or nags. Rolling 7-day context may ONLY appear as a plain, inline sentence. No UI chips for streaks.
 - Transitions ≤ 150ms ease-out; respect `prefers-reduced-motion`; nothing animates while idle.
 - Inline calm validation only (muted stone text); no modals, no toasts, no error red chrome.
 - All interactive elements ≥44px; visible focus ring always.

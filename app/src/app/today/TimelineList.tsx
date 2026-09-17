@@ -55,6 +55,13 @@ export default function TimelineList({
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showReceipts, setShowReceipts] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<{
+    activity: string
+    category: string
+    start_time: string
+    end_time: string
+  }>({ activity: '', category: 'Unclear', start_time: '', end_time: '' })
 
   const formatDuration = (mins: number | null, start: string | null, end: string | null) => {
     let m = mins || 0
@@ -147,23 +154,49 @@ export default function TimelineList({
     }
   }
 
-  const handleEdit = async (entry: Entry) => {
-    if (!confirm('Edit this entry? It will be removed from your timeline so you can parse it again.')) return
-    setLoadingId(entry.id)
-    try {
-      const res = await fetch(`/api/entries/${entry.id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete')
+  const startEditing = (entry: Entry) => {
+    setEditingId(entry.id)
+    setExpandedId(null)
+    setEditForm({
+      activity: entry.activity || '',
+      category: entry.category || 'Unclear',
+      start_time: entry.start_time || '',
+      end_time: entry.end_time || '',
+    })
+  }
 
-      const params = new URLSearchParams()
-      if (entry.raw_fragment) {
-        params.set('reparse', entry.raw_fragment)
-      }
-      router.push(`/log?${params.toString()}`)
+  const cancelEditing = () => {
+    setEditingId(null)
+  }
+
+  const saveEdit = async (id: string) => {
+    if (!editForm.activity.trim()) return
+    setLoadingId(id)
+    try {
+      const res = await fetch(`/api/entries/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activity: editForm.activity,
+          category: editForm.category,
+          start_time: editForm.start_time || null,
+          end_time: editForm.end_time || null,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to update entry')
+      setEditingId(null)
+      router.refresh()
     } catch (e) {
       console.error(e)
-      alert('Could not prepare edit.')
+      alert('Could not save changes.')
+    } finally {
       setLoadingId(null)
     }
+  }
+
+  const handleReparse = (entry: Entry) => {
+    const text = entry.raw_fragment || `${entry.start_time ? `${entry.start_time} to ${entry.end_time || ''} ` : ''}${entry.activity}`
+    router.push(`/log?reparse=${encodeURIComponent(text)}`)
   }
 
   if (!initialEntries || initialEntries.length === 0) {
@@ -171,10 +204,102 @@ export default function TimelineList({
   }
 
   const renderCard = (entry: Entry) => {
+    const isEditing = editingId === entry.id
     const colorClass = CATEGORY_COLORS[entry.category] || CATEGORY_COLORS['Unclear']
     const duration = formatDuration(entry.duration_minutes, entry.start_time, entry.end_time)
     const isExpanded = expandedId === entry.id
     const stamp = timeLabel(entry)
+
+    if (isEditing) {
+      return (
+        <div className={`p-4 bg-surface border border-ink/40 rounded-md shadow-sm ${loadingId === entry.id ? 'opacity-50 pointer-events-none' : ''}`}>
+          <div className="flex justify-between items-center mb-3">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-ink-muted">Edit Entry</span>
+            <button onClick={cancelEditing} className="text-xs text-ink-muted hover:text-ink">Cancel</button>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[11px] font-medium text-ink-muted mb-1">Activity</label>
+              <input
+                type="text"
+                value={editForm.activity}
+                onChange={(e) => setEditForm((f) => ({ ...f, activity: e.target.value }))}
+                placeholder="What did you do?"
+                className="w-full px-3 py-2 bg-surface border border-border rounded text-sm text-ink focus:outline-none focus:ring-1 focus:ring-ink"
+                autoFocus
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-medium text-ink-muted mb-1">Category</label>
+                <select
+                  value={editForm.category}
+                  onChange={(e) => setEditForm((f) => ({ ...f, category: e.target.value }))}
+                  className="w-full px-2 py-1.5 bg-surface border border-border rounded text-xs font-medium text-ink focus:outline-none focus:ring-1 focus:ring-ink"
+                >
+                  <option value="Trading/Deep Work">Trading/Deep Work</option>
+                  <option value="Agency/Business">Agency/Business</option>
+                  <option value="Life/Fuel">Life/Fuel</option>
+                  <option value="Distraction">Distraction</option>
+                  <option value="Unclear">Unclear</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-ink-muted mb-1">Time (Start – End)</label>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="time"
+                    value={editForm.start_time}
+                    onChange={(e) => setEditForm((f) => ({ ...f, start_time: e.target.value }))}
+                    className="w-full px-1.5 py-1 bg-surface border border-border rounded text-xs font-mono text-ink text-center"
+                  />
+                  <span className="text-ink-muted">–</span>
+                  <input
+                    type="time"
+                    value={editForm.end_time}
+                    onChange={(e) => setEditForm((f) => ({ ...f, end_time: e.target.value }))}
+                    className="w-full px-1.5 py-1 bg-surface border border-border rounded text-xs font-mono text-ink text-center"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-2 border-t border-border mt-3">
+              <button
+                type="button"
+                onClick={() => handleReparse(entry)}
+                className="text-[11px] text-ink-muted hover:text-ink underline transition-colors"
+                title="Open this text in /log to reparse with AI without deleting this entry"
+              >
+                Open in /log
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={cancelEditing}
+                  disabled={loadingId === entry.id}
+                  className="px-3 py-1.5 text-xs text-ink-muted hover:text-ink transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => saveEdit(entry.id)}
+                  disabled={loadingId === entry.id || !editForm.activity.trim()}
+                  className="px-4 py-1.5 text-xs bg-ink text-background rounded font-semibold disabled:opacity-50 transition-opacity"
+                >
+                  {loadingId === entry.id ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    }
 
     return (
       <div className={`p-4 bg-surface border border-border rounded-md relative ${loadingId === entry.id ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -212,7 +337,7 @@ export default function TimelineList({
 
         {isExpanded && (
           <div className="flex gap-5 justify-end items-center border-t border-border mt-3 pt-3">
-            <button onClick={() => handleEdit(entry)} className="flex items-center gap-1.5 text-xs font-medium text-ink-muted hover:text-ink transition-colors" title="Edit text">
+            <button onClick={() => startEditing(entry)} className="flex items-center gap-1.5 text-xs font-medium text-ink-muted hover:text-ink transition-colors" title="Edit entry">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
               Edit
             </button>

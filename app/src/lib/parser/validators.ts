@@ -75,10 +75,11 @@ export function runValidators(
     if (entry.duration_minutes !== null && typeof entry.duration_minutes !== 'number') {
       hardFail = true;
     }
-    if (entry.start_time && !/^\d{1,2}:\d{2}$/.test(entry.start_time)) {
+    const timeRegex = /^([01]?\d|2[0-3]):[0-5]\d$/;
+    if (entry.start_time && !timeRegex.test(entry.start_time)) {
       hardFail = true;
     }
-    if (entry.end_time && !/^\d{1,2}:\d{2}$/.test(entry.end_time)) {
+    if (entry.end_time && !timeRegex.test(entry.end_time)) {
       hardFail = true;
     }
 
@@ -141,11 +142,12 @@ export function runValidators(
 
     // V4 No invented time (Grace mode for voice input handled by prompt, but we can do a strict check here)
     if (entry.start_time && inputMode === 'text') {
-       // Simple check: does the number exist in the input? (Very basic heuristic)
+       // Check if the hour (in 24-hr or 12-hr representation) or midnight keyword appears in user input
        const h = parseInt(entry.start_time.split(':')[0], 10);
-       const h12 = h > 12 ? h - 12 : h;
+       const h12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
        const inputLower = input.toLowerCase();
-       if (!inputLower.includes(h.toString()) && !inputLower.includes(h12.toString())) {
+       const isMidnight = h === 0 && inputLower.includes('midnight');
+       if (!inputLower.includes(h.toString()) && !inputLower.includes(h12.toString()) && !isMidnight) {
          violations.push('V4_INVENTED_TIME');
        }
     }
@@ -158,11 +160,12 @@ export function runValidators(
     finalEntries.push(entry);
   }
 
-  // V5 Overlap
-  finalEntries.sort((a, b) => (timeToMinutes(a.start_time) || 0) - (timeToMinutes(b.start_time) || 0));
-  for (let i = 0; i < finalEntries.length - 1; i++) {
-    const e1 = finalEntries[i];
-    const e2 = finalEntries[i + 1];
+  // V5 Overlap: Only entries with both start_time and end_time participate in overlap checks
+  const timedEntries = finalEntries.filter(e => e.start_time !== null && e.end_time !== null);
+  timedEntries.sort((a, b) => (timeToMinutes(a.start_time)!) - (timeToMinutes(b.start_time)!));
+  for (let i = 0; i < timedEntries.length - 1; i++) {
+    const e1 = timedEntries[i];
+    const e2 = timedEntries[i + 1];
     const e1End = timeToMinutes(e1.end_time);
     const e2Start = timeToMinutes(e2.start_time);
     
@@ -175,6 +178,16 @@ export function runValidators(
       if (!e2.violations.includes('V5_OVERLAP')) e2.violations.push('V5_OVERLAP');
     }
   }
+
+  // Final sorting: chronological for timed entries, untimed entries pushed to the end
+  finalEntries.sort((a, b) => {
+    const aM = timeToMinutes(a.start_time);
+    const bM = timeToMinutes(b.start_time);
+    if (aM === null && bM === null) return 0;
+    if (aM === null) return 1;
+    if (bM === null) return -1;
+    return aM - bM;
+  });
 
   // V8 Coverage check (heuristic)
   // Check if there are time tokens in input not captured in any raw_fragment

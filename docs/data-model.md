@@ -7,15 +7,20 @@
 - `raw_logs`
   - id, user_id, text, log_date, created_at
 - `time_entries`
-  - id, user_id, raw_log_id, date, start_time, end_time, duration_minutes, category, activity, source, confidence, needs_review, impact_rating
-  - PENDING: `raw_fragment` column does not exist yet — see BUG-010 in `docs/known_bugs.md` for the one-line ALTER
+  - id, user_id, raw_log_id, date, start_time, end_time, duration_minutes, category, activity, raw_fragment, source, confidence, needs_review, impact_rating, created_at
 - `daily_summaries`
-  - user_id, date, productive_minutes, distraction_minutes, fuel_minutes, unlogged_minutes, bad_impact_minutes
+  - user_id, date, productive_minutes, distraction_minutes, fuel_minutes, unlogged_minutes, bad_impact_minutes, updated_at
 - `ai_feedback`
-  - entry_id, accepted, corrected_fields
-  - PENDING: `user_id` column does not exist yet — code already writes it (`save/route.ts`) and reads it (`parser/context.ts`); run the migration plan in `scratch/last_session.md` → "PENDING WORK". Soft-fails: learning loop dead until run.
+  - id, entry_id, user_id, accepted, corrected_fields, created_at
+  - RLS policies: "ai_feedback select own" and "ai_feedback insert own" enforced by user_id
 
 *Note: Notion is export/backup only — never the primary app database.*
+
+## Database Infrastructure & Connection
+- **Project Ref**: `kmrqyaecdlprcpwmglgf`
+- **Region**: `ap-southeast-1` (AWS Singapore)
+- **Direct Pooler Host**: `aws-0-ap-southeast-1.pooler.supabase.com:6543` (Database: `postgres`, User: `postgres.kmrqyaecdlprcpwmglgf`)
+- **Credentials Location**: Documented in `app/.env.local` (`DATABASE_URL`, `SUPABASE_DB_PASSWORD`, `SUPABASE_SERVICE_ROLE_KEY`).
 
 ## Privacy Rules
 - Row-Level Security (RLS) on every table.

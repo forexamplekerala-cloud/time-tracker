@@ -26,7 +26,7 @@ All run inside `app/`:
 - `duration_minutes` is a number or `null` - never the string "unknown".
 - AI proposes, user owns the record: review-before-save is mandatory; no auto-saving parsed entries.
 - "Brutal truth" summary lines are deterministic string templates - NEVER AI-generated.
-- Phase 1 traps are forbidden: no native apps, no screen-time integration, no payments, no social/team features, no streaks/badges/gamification, no notifications, no landing page, no medical/ADHD claims.
+- Phase 1 traps are forbidden: no native apps, no screen-time integration, no payments, no social/team features, no streaks (or "streams" / "rolling counts"), no badges/gamification, no notifications, no landing page, no medical/ADHD claims. Rolling context MUST be plain, inline sentences, NEVER UI chips.
 - Privacy: Supabase row-level security; each user sees only their own data. No public feed, no sharing.
 - 24-hour time internally; IST (Asia/Kolkata) for display.
 - Productive time = Trading/Deep Work + Agency/Business, plus one exception (user-approved 2026-09-10): gym entries (Life/Fuel, activity matching /gym/i) rated 'Good' count as Productive. ALL other Fuel never inflates productive hours. Single source of truth: `countsAsProductive()` in `app/src/lib/entries/summary.ts`.

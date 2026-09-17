@@ -3,11 +3,18 @@ import Link from 'next/link'
 
 export default async function WeekPage() {
   const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
   
-  // Get last 7 days of summaries
-  const { data: summaries } = await supabase
+  // Get last 7 days of summaries scoped to the authenticated user
+  let query = supabase
     .from('daily_summaries')
     .select('*')
+
+  if (user) {
+    query = query.eq('user_id', user.id)
+  }
+
+  const { data: summaries } = await query
     .order('date', { ascending: false })
     .limit(7)
     
@@ -30,12 +37,19 @@ export default async function WeekPage() {
     return total > max ? total : max
   }, 0) || 600 // fallback to 10 hours if empty
 
+  let headline = "No time logged this week — the record is blank."
+  if (totalProd > 0 || totalDist > 0) {
+    headline = totalDist > totalProd
+      ? "Distraction is winning. Time to tighten up."
+      : "A solid week, but keep distraction tight."
+  }
+
   return (
     <div className="flex flex-col py-6">
       <header className="mb-8">
         <h1 className="text-2xl text-ink font-semibold mb-2">This Week</h1>
         <p className="text-lg font-medium text-ink-muted">
-          {totalDist > totalProd ? "Distraction is winning. Time to tighten up." : "A solid week, but distraction creeping up."}
+          {headline}
         </p>
       </header>
       
@@ -46,7 +60,7 @@ export default async function WeekPage() {
           {sortedSummaries.length === 0 ? (
             <p className="text-sm text-ink-muted italic w-full text-center mt-10">No data for this week yet.</p>
           ) : (
-            sortedSummaries.map((s, i) => {
+            sortedSummaries.map((s) => {
               const prod = s.productive_minutes || 0
               const dist = s.distraction_minutes || 0
               const fuel = s.fuel_minutes || 0
@@ -57,11 +71,14 @@ export default async function WeekPage() {
               const distPct = (dist / maxMins) * 100
               const fuelPct = (fuel / maxMins) * 100
 
-              const dateObj = new Date(s.date)
-              const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dateObj.getDay()]
+              // Format day name in IST to avoid UTC shifts
+              const dayName = new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Asia/Kolkata',
+                weekday: 'short',
+              }).format(new Date(`${s.date}T12:00:00+05:30`))
 
               return (
-                <Link key={s.id} href={`/today?date=${s.date}`} className="flex-1 flex flex-col items-center gap-2 group">
+                <Link key={s.date} href={`/today?date=${s.date}`} className="flex-1 flex flex-col items-center gap-2 group">
                   <div className="w-full flex flex-col gap-0 justify-end h-full hover:opacity-80 transition-opacity cursor-pointer relative rounded-t-sm overflow-hidden bg-surface">
                     {total === 0 ? (
                       <div className="w-full border-2 border-dashed border-border rounded-sm h-full opacity-50"></div>

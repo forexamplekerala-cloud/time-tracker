@@ -7,6 +7,7 @@ export default async function LogPage({
   searchParams: { reparse?: string }
 }) {
   const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
   const now = new Date()
   const istDateString = new Intl.DateTimeFormat('en-GB', {
@@ -27,10 +28,16 @@ export default async function LogPage({
   // "Last logged" stamp: how far today's record reaches.
   // Anchor per entry: end_time -> start_time -> created_at (IST). Max wins.
   // Never a countdown, never a nag — just the fact. Absent when nothing is logged.
-  const { data: todayEntries } = await supabase
+  let query = supabase
     .from('time_entries')
     .select('start_time, end_time, created_at')
     .eq('date', istDateStr)
+
+  if (user) {
+    query = query.eq('user_id', user.id)
+  }
+
+  const { data: todayEntries } = await query
 
   let lastLoggedLabel: string | null = null
   if (todayEntries && todayEntries.length > 0) {
