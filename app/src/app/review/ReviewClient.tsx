@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Trash2, Edit2, AlertCircle } from 'lucide-react'
 import clsx from 'clsx'
+import { savePhraseHistory } from '@/lib/suggestions'
 
 type ParsedEntry = {
   id?: string;
@@ -82,6 +83,12 @@ export default function ReviewClient() {
 
       if (!response.ok) throw new Error("Failed to save")
       
+      // Save activities to offline phrase memory
+      try {
+        const activities = entries.map(e => e.activity).filter(Boolean)
+        savePhraseHistory(activities)
+      } catch (_) {}
+
       sessionStorage.removeItem('pendingParseResult')
       router.push('/today')
     } catch (e) {
